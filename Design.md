@@ -80,9 +80,7 @@ NYC has roughly **one million rent-stabilized units**, and a meaningful fraction
 | Migrations / queries | **Drizzle ORM** (or raw SQL — fine for a hackathon) | Type-safe queries; if it slows us down, drop to raw |
 | LLM client | **`@anthropic-ai/sdk`** | For complaint drafting, with prompt caching on the system prompt |
 | Hosting | **Vercel** | Zero-config; SQLite file ships with the build |
-| Maps (optional) | **Mapbox GL JS** or **Leaflet + OSM** | Only if we have time in Phase 4 |
 
-If the team prefers Python: swap Next.js for **FastAPI + a thin React (Vite) frontend**. Same architecture, same DB, same phases. The plan below uses the JS path because it's faster to demo.
 
 ---
 

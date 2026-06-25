@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import DatePicker from 'react-datepicker';
-import type { LeaseEntry, BaseRent } from '@/lib/overcharge';
+import type { LeaseEntry } from '@/lib/overcharge';
 
 type LeaseRow = {
   startDate: Date | null;
@@ -10,11 +10,12 @@ type LeaseRow = {
   endDateManual: boolean;
   monthlyRent: string;
   leaseTermMonths: 12 | 24;
+  vacancyLease?: boolean;
 };
 
 type Props = {
   isSubmitting: boolean;
-  onSubmit: (input: { history: LeaseEntry[]; baseRent?: BaseRent }) => void;
+  onSubmit: (input: { history: LeaseEntry[] }) => void;
 };
 
 const EMPTY_ROW: LeaseRow = {
@@ -23,6 +24,7 @@ const EMPTY_ROW: LeaseRow = {
   endDateManual: false,
   monthlyRent: '',
   leaseTermMonths: 12,
+  vacancyLease: false,
 };
 
 function toISO(d: Date): string {
@@ -54,10 +56,6 @@ const datePickerClass = `${inputBase} cursor-pointer`;
 
 export default function RentHistoryForm({ isSubmitting, onSubmit }: Props) {
   const [rows, setRows] = useState<LeaseRow[]>([{ ...EMPTY_ROW }]);
-  const [includeBase, setIncludeBase] = useState(false);
-  const [baseAmount, setBaseAmount] = useState('');
-  const [baseAsOf, setBaseAsOf] = useState<Date | null>(null);
-  const [baseTerm, setBaseTerm] = useState<12 | 24>(12);
   const [error, setError] = useState<string | null>(null);
 
   function updateRow(i: number, patch: Partial<LeaseRow>) {
@@ -85,10 +83,12 @@ export default function RentHistoryForm({ isSubmitting, onSubmit }: Props) {
     setError(null);
 
     const completeRows = rows.filter(isCompleteRow);
+
     if (completeRows.length === 0) {
-      setError('Add at least one complete lease (start, end, rent).');
+      setError('Add at least one lease (start, rent, term).');
       return;
     }
+
     for (const r of completeRows) {
       if (r.startDate! >= r.endDate!) {
         setError(`Lease starting ${toISO(r.startDate!)} must end after it starts.`);
@@ -101,19 +101,10 @@ export default function RentHistoryForm({ isSubmitting, onSubmit }: Props) {
       endDate: toISO(r.endDate!),
       monthlyRent: Number.parseFloat(r.monthlyRent),
       leaseTermMonths: r.leaseTermMonths,
+      vacancyLease: r.vacancyLease ?? false,
     }));
 
-    let baseRent: BaseRent | undefined;
-    if (includeBase) {
-      const amt = Number.parseFloat(baseAmount);
-      if (!Number.isFinite(amt) || amt <= 0 || !baseAsOf) {
-        setError('Registered base rent needs both an amount and an "as of" date.');
-        return;
-      }
-      baseRent = { amount: amt, asOfDate: toISO(baseAsOf), termMonths: baseTerm };
-    }
-
-    onSubmit({ history, baseRent });
+    onSubmit({ history });
   }
 
   const yearRange = (): { min: number; max: number } => {
@@ -143,7 +134,7 @@ export default function RentHistoryForm({ isSubmitting, onSubmit }: Props) {
       <div className="space-y-3">
         <div className="hidden sm:grid grid-cols-12 gap-2 px-1 eyebrow">
           <span className="col-span-3">Lease start</span>
-          <span className="col-span-3">Lease end</span>
+          <span className="col-span-3">Lease end (auto-filled)</span>
           <span className="col-span-3">Monthly rent</span>
           <span className="col-span-2">Term</span>
           <span className="col-span-1" />
@@ -221,80 +212,15 @@ export default function RentHistoryForm({ isSubmitting, onSubmit }: Props) {
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={addRow}
-          className="inline-flex items-center gap-1 text-sm font-semibold text-brass-deep hover:text-brass"
-        >
-          <span className="text-base leading-none">+</span> Add another lease
-        </button>
-      </div>
-
-      <div className="rule" />
-
-      <div>
-        <label className="flex cursor-pointer items-start gap-3 group">
-          <span className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-[5px] border ${
-            includeBase ? 'border-brass bg-brass' : 'border-rule-strong bg-bone'
-          } transition-colors`}>
-            {includeBase && (
-              <svg viewBox="0 0 12 12" className="h-3 w-3 text-[#1a1305]" fill="none" stroke="currentColor" strokeWidth="2.4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2 6.5l2.5 2.5L10 3.5" />
-              </svg>
-            )}
-          </span>
-          <input
-            type="checkbox"
-            checked={includeBase}
-            onChange={(e) => setIncludeBase(e.target.checked)}
-            className="sr-only"
-          />
-          <span className="text-sm text-secondary leading-relaxed">
-            <span className="font-semibold text-ink-text">I have a registered base rent</span>{' '}
-            from a DHCR rent history (Records Access, Form REC-1). Anchoring on a registered base produces a more reliable estimate.
-          </span>
-        </label>
-        {includeBase && (
-          <div className="mt-3 grid grid-cols-12 gap-2 animate-fade-in-up">
-            <div className="relative col-span-12 sm:col-span-4">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted font-mono">$</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={baseAmount}
-                onChange={(e) => setBaseAmount(e.target.value)}
-                placeholder="Registered rent"
-                className={`pl-6 font-mono ${inputBase}`}
-              />
-            </div>
-            <div className="col-span-12 sm:col-span-4">
-              <DatePicker
-                selected={baseAsOf}
-                onChange={(date: Date | null) => setBaseAsOf(date)}
-                dateFormat="MM/dd/yyyy"
-                placeholderText="As of date"
-                showMonthDropdown
-                showYearDropdown
-                dropdownMode="select"
-                minDate={new Date(minYear, 0, 1)}
-                maxDate={new Date()}
-                className={datePickerClass}
-                wrapperClassName="w-full"
-                aria-label="As of date"
-              />
-            </div>
-            <select
-              value={baseTerm}
-              onChange={(e) => setBaseTerm(Number(e.target.value) as 12 | 24)}
-              className={`col-span-12 sm:col-span-4 ${inputBase}`}
-            >
-              <option value={12}>1-year base lease</option>
-              <option value={24}>2-year base lease</option>
-            </select>
-          </div>
-        )}
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={addRow}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-brass-deep hover:text-brass"
+          >
+            <span className="text-base leading-none">+</span> Add another lease
+          </button>
+        </div>
       </div>
 
       {error && (

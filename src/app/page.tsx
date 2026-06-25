@@ -13,7 +13,7 @@ import Footer from '@/components/Footer';
 import StageStepper, { type Stage } from '@/components/StageStepper';
 import type { GeoResult } from '@/lib/geosearch';
 import type { Verdict } from '@/lib/stabilization';
-import type { Estimate, LeaseEntry, BaseRent } from '@/lib/overcharge';
+import type { Estimate, LeaseEntry } from '@/lib/overcharge';
 
 const CityMap3D = dynamic(() => import('@/components/CityMap3D'), { ssr: false });
 
@@ -135,7 +135,7 @@ export default function Home() {
     }
   }
 
-  async function handleEstimate(input: { history: LeaseEntry[]; baseRent?: BaseRent }) {
+  async function handleEstimate(input: { history: LeaseEntry[] }) {
     if (!lookup) return;
     setEstimate(null);
     setEstimateError(null);
@@ -144,7 +144,7 @@ export default function Home() {
       const res = await fetch('/api/estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...input, bbl: lookup.bbl, lookupId: lookup.lookupId }),
+        body: JSON.stringify({ history: input.history, bbl: lookup.bbl, lookupId: lookup.lookupId }),
       });
       if (!res.ok) {
         const errorBody = (await res.json().catch(() => ({}))) as { error?: string };

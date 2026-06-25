@@ -37,6 +37,12 @@ const ESTIMATE: Estimate = {
     },
   ],
   caveats: ['MCI/IAI not modeled.'],
+  baseline_lease: {
+    lease_start: '2022-10-01',
+    lease_end: '2023-09-30',
+    term_months: 12,
+    monthly_rent: 2000,
+  },
 };
 
 const INPUT: ComplaintInput = {

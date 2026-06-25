@@ -7,6 +7,9 @@ import type { LLMProvider, LLMRequest } from './types';
 // realize the cached-input discount on every retry.
 const MODEL = 'gpt-4o';
 
+// Lazily constructed + cached across calls within the same server
+// process — avoids re-reading the env var and re-constructing the SDK
+// client on every single complaint draft.
 let client: OpenAI | null = null;
 function getClient(): OpenAI {
   if (client) return client;
@@ -16,6 +19,10 @@ function getClient(): OpenAI {
   return client;
 }
 
+// Thin wrapper around OpenAI's streaming chat-completions API that
+// re-shapes it to the LLMProvider['stream'] contract: an AsyncGenerator
+// yielding plain text deltas (no SSE envelope, no role/finish_reason
+// bookkeeping) — that's all complaint.ts's streamComplaint() forwards on.
 async function* streamText(req: LLMRequest): AsyncGenerator<string> {
   const stream = await getClient().chat.completions.create(
     {
@@ -31,6 +38,9 @@ async function* streamText(req: LLMRequest): AsyncGenerator<string> {
     { signal: req.signal },
   );
 
+  // Each streamed chunk can contain zero or one content delta (plus
+  // role/finish_reason metadata we don't care about) — only forward
+  // chunks that actually carry text.
   for await (const chunk of stream) {
     const delta = chunk.choices?.[0]?.delta?.content;
     if (typeof delta === 'string' && delta.length > 0) {

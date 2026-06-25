@@ -3,6 +3,7 @@ import type { LLMProvider, LLMRequest } from './types';
 
 const MODEL = 'claude-sonnet-4-6';
 
+// Used only when OPENAI_API_KEY is absent (see pickProvider() in index.ts).
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (client) return client;
@@ -12,6 +13,8 @@ function getClient(): Anthropic {
   return client;
 }
 
+// Same job as openai.ts's streamText: adapt this SDK's streaming shape
+// to the provider-agnostic AsyncGenerator<string> contract.
 async function* streamText(req: LLMRequest): AsyncGenerator<string> {
   const stream = getClient().messages.stream(
     {
@@ -31,6 +34,9 @@ async function* streamText(req: LLMRequest): AsyncGenerator<string> {
     { signal: req.signal },
   );
 
+  // The Anthropic stream emits multiple event types (message_start,
+  // content_block_start, ...); the only one carrying actual generated
+  // text is a content_block_delta whose delta is a text_delta.
   for await (const event of stream) {
     if (
       event.type === 'content_block_delta' &&

@@ -10,8 +10,32 @@ const fmtCents = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 const fmtPct = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}%`);
 
+function parseIso(iso: string): Date {
+  return new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+}
+
+function monthsBetween(startIso: string, endIso: string): number {
+  const start = parseIso(startIso);
+  const end = parseIso(endIso);
+  if (end <= start) return 0;
+  return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30.4375));
+}
+
+function minIso(a: string, b: string): string {
+  return a < b ? a : b;
+}
+
 export default function OverchargeSummary({ estimate }: Props) {
   const hasOvercharge = estimate.overcharge_total_within_limit > 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const currentOverchargeTotal = estimate.years_analyzed.reduce((acc, year) => {
+    if (year.lease_start >= today) return acc;
+    const overlapEnd = minIso(year.lease_end, today);
+    const monthsSoFar = monthsBetween(year.lease_start, overlapEnd);
+    const amount = Math.max(0, Math.round(monthsSoFar * year.overcharge_monthly * 100) / 100);
+    return acc + amount;
+  }, 0);
+  const firstOverchargeLeaseStart = estimate.years_analyzed.find((year) => year.overcharge_monthly > 0)?.lease_start ?? null;
   const stripBg = hasOvercharge ? 'bg-rust' : 'bg-verdigris';
   const pillBg = hasOvercharge ? 'bg-rust' : 'bg-verdigris';
   const pillText = 'text-bone';
@@ -27,7 +51,7 @@ export default function OverchargeSummary({ estimate }: Props) {
               {hasOvercharge ? (
                 <>
                   <span className="block text-secondary text-base font-sans tracking-normal mb-1">
-                    Across the last 6 years, you may have been overcharged
+                    You’ve been overcharged {fmt(currentOverchargeTotal)} as of today. If this remains unchecked, the first rent hike that becomes actionable starts with the lease beginning on {firstOverchargeLeaseStart ?? 'the first overcharged renewal'}, and you are set to be overcharged {fmt(estimate.overcharge_total_within_limit)} by the end of your final lease.
                   </span>
                   <span className="text-rust tabular">{fmt(estimate.overcharge_total_within_limit)}</span>
                 </>
@@ -142,7 +166,7 @@ export default function OverchargeSummary({ estimate }: Props) {
         )}
 
         <p className="mt-5 text-[11px] leading-relaxed text-muted">
-          Estimate only — not legal advice. To anchor on a registered base rent, request your
+          Estimate only — not legal advice. To confirm the starting legal rent, request your
           apartment’s rent history via{' '}
           <a
             href="https://hcr.ny.gov/records-access"

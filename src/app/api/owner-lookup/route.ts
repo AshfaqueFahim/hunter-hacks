@@ -1,3 +1,12 @@
+// ──────────────────────────────────────────────────────────────────────
+// Supporting tributary to the drafting flow, not part of the core
+// generate-the-packet pipeline: ComplaintPreview.tsx calls this on mount
+// (keyed by the building's BIN) to auto-fill the "Owner / managing agent"
+// fields from HPD's public registration data, so the tenant doesn't have
+// to type it in by hand before drafting. See src/lib/hpd.ts for the
+// actual NYC Open Data query.
+// ──────────────────────────────────────────────────────────────────────
+
 import { z } from 'zod';
 import { lookupOwnerByBin } from '@/lib/hpd';
 

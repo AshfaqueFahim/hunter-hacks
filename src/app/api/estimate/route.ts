@@ -12,17 +12,11 @@ const LeaseEntrySchema = z.object({
   endDate: IsoDate,
   monthlyRent: z.number().positive(),
   leaseTermMonths: LeaseTerm,
-});
-
-const BaseRentSchema = z.object({
-  amount: z.number().positive(),
-  asOfDate: IsoDate,
-  termMonths: LeaseTerm,
+  vacancyLease: z.boolean().optional(),
 });
 
 const RequestSchema = z.object({
   history: z.array(LeaseEntrySchema).max(40),
-  baseRent: BaseRentSchema.optional(),
   bbl: z.string().min(1).optional(),
   lookupId: z.number().int().positive().optional(),
   asOfDate: IsoDate.optional(),
@@ -44,9 +38,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const { history, baseRent, lookupId, asOfDate } = parsed.data;
+  const { history, lookupId, asOfDate } = parsed.data;
 
-  const result = estimate({ history, baseRent, asOfDate });
+  const result = estimate({ history, asOfDate });
 
   if (lookupId !== undefined) {
     try {

@@ -60,6 +60,40 @@ test('overcharge: mid-stream jump above RGB is flagged', () => {
   near(result.overcharge_total_within_limit, 1680, 5);
 });
 
+test('overcharge: baseline_lease is the true first lease, not years_analyzed[0]', () => {
+  const input: EstimateInput = {
+    history: [
+      { startDate: '2022-10-01', endDate: '2023-09-30', monthlyRent: 2000, leaseTermMonths: 12 },
+      { startDate: '2023-10-01', endDate: '2024-09-30', monthlyRent: 2200, leaseTermMonths: 12 },
+    ],
+    asOfDate: ASOF_TODAY,
+  };
+  const result = estimate(input);
+  // The 2022 lease is the baseline (move-in) lease — excluded from
+  // years_analyzed because it's the rent the rest of the math compares
+  // against, not a renewal with its own allowed/actual percentages.
+  assert.deepEqual(result.baseline_lease, {
+    lease_start: '2022-10-01',
+    lease_end: '2023-09-30',
+    term_months: 12,
+    monthly_rent: 2000,
+  });
+  // years_analyzed[0] is the SECOND lease — confirms the two are distinct.
+  assert.equal(result.years_analyzed[0].lease_start, '2023-10-01');
+});
+
+test('overcharge: baseline_lease is null when there is no usable history', () => {
+  assert.equal(estimate({ history: [], asOfDate: ASOF_TODAY }).baseline_lease, null);
+  const overlapping = estimate({
+    history: [
+      { startDate: '2022-10-01', endDate: '2024-09-30', monthlyRent: 2000, leaseTermMonths: 24 },
+      { startDate: '2023-10-01', endDate: '2025-09-30', monthlyRent: 2200, leaseTermMonths: 24 },
+    ],
+    asOfDate: ASOF_TODAY,
+  });
+  assert.equal(overlapping.baseline_lease, null);
+});
+
 test('overcharge: undercharge in later year does NOT offset prior overcharge', () => {
   const input: EstimateInput = {
     history: [
@@ -81,21 +115,6 @@ test('overcharge: undercharge in later year does NOT offset prior overcharge', (
   assert.equal(result.overcharge_monthly, 0);
 });
 
-test('overcharge: with registered base rent walks forward from base', () => {
-  const input: EstimateInput = {
-    history: [
-      { startDate: '2022-10-01', endDate: '2023-09-30', monthlyRent: 1100, leaseTermMonths: 12 },
-    ],
-    baseRent: { amount: 1000, asOfDate: '2022-01-01', termMonths: 12 },
-    asOfDate: ASOF_TODAY,
-  };
-  const result = estimate(input);
-  assert.equal(result.mode, 'with_base_rent');
-  // Order 54 (2022-10-01): 1yr = 3.25%. 1000 × 1.0325 = 1032.50
-  near(result.years_analyzed[0].legal_monthly, 1032.5);
-  near(result.years_analyzed[0].overcharge_monthly, 67.5);
-  near(result.overcharge_total_within_limit, 67.5 * 12, 5);
-});
 
 test('overcharge: pre-statute leases do not count toward 6-year window total', () => {
   // asOfDate = 2026-04-25 → 6-year statute starts 2020-04-25.
@@ -151,6 +170,35 @@ test('overcharge: 24-month lease uses 2-year RGB rate', () => {
   assert.equal(result.years_analyzed[0].allowed_pct, 5.0);
   near(result.years_analyzed[0].legal_monthly, 2100);
   near(result.years_analyzed[0].overcharge_monthly, 50);
+});
+
+test('overcharge: pre-HSTPA vacancy lease uses historical vacancy allowance', () => {
+  // Order 50 (2018-10-01): one-year vacancy allowance = 20% - (2.5 - 1.5) = 19.0%.
+  const input: EstimateInput = {
+    history: [
+      { startDate: '2017-10-01', endDate: '2018-09-30', monthlyRent: 1000, leaseTermMonths: 12 },
+      { startDate: '2018-10-01', endDate: '2019-09-30', monthlyRent: 1190, leaseTermMonths: 12, vacancyLease: true },
+    ],
+    asOfDate: ASOF_TODAY,
+  };
+  const result = estimate(input);
+  assert.equal(result.years_analyzed[0].vacancy_lease, true);
+  near(result.years_analyzed[0].allowed_pct, 19.0);
+  near(result.years_analyzed[0].legal_monthly, 1190);
+});
+
+test('overcharge: overlapping leases are rejected', () => {
+  const input: EstimateInput = {
+    history: [
+      { startDate: '2022-10-01', endDate: '2024-09-30', monthlyRent: 2000, leaseTermMonths: 24 },
+      { startDate: '2023-10-01', endDate: '2025-09-30', monthlyRent: 2200, leaseTermMonths: 24 },
+    ],
+    asOfDate: ASOF_TODAY,
+  };
+  const result = estimate(input);
+  assert.equal(result.years_analyzed.length, 0);
+  assert.equal(result.overcharge_total_within_limit, 0);
+  assert.ok(result.caveats.some((c) => c.includes('overlapping leases')));
 });
 
 test('overcharge: missing RGB order carries legal rent forward unchanged', () => {

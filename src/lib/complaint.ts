@@ -1,3 +1,15 @@
+// ──────────────────────────────────────────────────────────────────────
+// The orchestration layer for AI drafting. Called only from
+// src/app/api/complaint/route.ts (server-side; never imported by client
+// components directly). Three jobs live here:
+//   1. buildFieldMap()    — derive display-ready field values + placeholders
+//                            (used both for the model prompt AND sent to the
+//                            client as a "here's what we're using" preview).
+//   2. buildUserMessage() — assemble the big structured JSON payload that
+//                            becomes the model's user message.
+//   3. streamComplaint()  — pick a provider and stream its response.
+// ──────────────────────────────────────────────────────────────────────
+
 import type { Verdict } from './stabilization';
 import type { Estimate } from './overcharge';
 import { getIncrease } from './rgb';
@@ -23,6 +35,11 @@ export type TenantType = 'prime' | 'sub' | 'hotel' | 'roommate';
 export type Section8Program = 'none' | 'hud' | 'nycha' | 'hcv' | 'hpd';
 export type Tone = 'neutral' | 'assertive' | 'conciliatory';
 
+// Everything the drafting pipeline needs. `verdict` and `estimate` are
+// produced by earlier stages of the app (the DHCR/NYCDB lookup and the
+// overcharge calculator, respectively); the rest is whatever the tenant
+// typed into ComplaintPreview.tsx's form, validated by the route's
+// RequestSchema before it ever reaches this type.
 export type ComplaintInput = {
   verdict: Verdict;
   estimate: Estimate;
@@ -75,6 +92,11 @@ export type ComplaintInput = {
   tone?: Tone;
 };
 
+// Output of buildFieldMap() — sent to the client as the `{type:'fields'}`
+// NDJSON event AND used internally to build the model's user message.
+// Every value here is "placeholder-resolved": missing inputs have
+// already been swapped for a bracketed PLACEHOLDER string, so nothing
+// downstream needs to special-case `undefined`.
 export type FieldMap = {
   // Mirrors what the user typed plus our derived defaults — the UI
   // surfaces this as a "we sent the model exactly this" preview card.
@@ -111,11 +133,17 @@ const PLACEHOLDER = {
   ownerPhone: '[OWNER / AGENT PHONE]',
 } as const;
 
+// Empty/whitespace-only strings count as "not provided" — falls back to
+// `fallback` (almost always one of the PLACEHOLDER values above).
 function trimOr(value: string | undefined, fallback: string): string {
   const v = value?.trim();
   return v && v.length > 0 ? v : fallback;
 }
 
+// Resolves every tenant-supplied (or missing) field to a final display
+// value. Pure and synchronous — no I/O, no model call — which is why the
+// route handler can call it and emit the result before the (slow)
+// streamComplaint() call even starts.
 export function buildFieldMap(input: ComplaintInput): FieldMap {
   return {
     tenant_name: trimOr(input.tenantName, PLACEHOLDER.name),
@@ -139,6 +167,11 @@ export function buildFieldMap(input: ComplaintInput): FieldMap {
   };
 }
 
+// Assembles the JSON payload that becomes the model's single user
+// message (paired with COMPLAINT_SYSTEM_PROMPT as the system message).
+// Everything the model is allowed to state as fact lives in this object
+// — the system prompt's "HARD RULES" section explicitly forbids it from
+// inventing names/dates/dollar amounts not present here.
 function buildUserMessage(input: ComplaintInput, fields: FieldMap): string {
   const overchargeYears = input.estimate.years_analyzed.filter(
     (y) => y.overcharge_monthly > 0,
@@ -148,14 +181,17 @@ function buildUserMessage(input: ComplaintInput, fields: FieldMap): string {
   // These are conservative — they read directly from data we already have,
   // not invented. The prompt is told to use these and never replace them
   // with [ASK TENANT] placeholders.
-  const sortedLeases = input.estimate.years_analyzed
-    .slice()
-    .sort((a, b) => a.lease_start.localeCompare(b.lease_start));
-  const firstLease = sortedLeases[0];
+  //
+  // IMPORTANT: the move-in lease is `estimate.baseline_lease`, NOT
+  // `years_analyzed[0]`. overcharge.ts's estimate() treats the tenant's
+  // very first lease as the legal-rent baseline and starts
+  // `years_analyzed` from the SECOND lease onward — so years_analyzed[0]
+  // is one lease too late for "when did you move in / what did you pay."
+  const baseline = input.estimate.baseline_lease;
 
-  const moveInDate = input.moveInDate ?? firstLease?.lease_start ?? null;
-  const initialRent = input.initialRent ?? firstLease?.actual_monthly ?? null;
-  const initialTermYears = firstLease ? (firstLease.term_months === 24 ? 2 : 1) : null;
+  const moveInDate = input.moveInDate ?? baseline?.lease_start ?? null;
+  const initialRent = input.initialRent ?? baseline?.monthly_rent ?? null;
+  const initialTermYears = baseline ? (baseline.term_months === 24 ? 2 : 1) : null;
 
   // Security deposit: if the tenant didn't tell us, presume one month's rent
   // (the legal cap under NY GOL §7-108 since 2019). Marked "presumed" so the
@@ -196,7 +232,7 @@ function buildUserMessage(input: ComplaintInput, fields: FieldMap): string {
       date: moveInDate,
       initial_rent: initialRent,
       lease_term_years: initialTermYears,
-      derived: input.moveInDate === undefined && firstLease !== undefined,
+      derived: input.moveInDate === undefined && baseline !== null,
     },
     electricity_included: input.electricityIncluded ?? null,
     owner: {
@@ -253,6 +289,11 @@ function buildUserMessage(input: ComplaintInput, fields: FieldMap): string {
   )}`;
 }
 
+// RA-89 §13 asks for the date range the overcharge covers — derived as
+// "first overchaged lease's start" through "last overcharged lease's
+// end" rather than the tenancy's full span, since pre-overcharge years
+// aren't part of the complaint. Returns null when nothing in the lease
+// history actually exceeded the RGB ceiling.
 function deriveOverchargePeriod(
   years: { lease_start: string; lease_end: string; overcharge_monthly: number }[],
 ): { from: string; to: string } | null {

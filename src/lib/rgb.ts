@@ -31,9 +31,13 @@ function toIsoDate(d: Date | string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function getIncrease(leaseStart: Date | string, termMonths: LeaseTerm): RgbIncrease | null {
+export function getOrder(leaseStart: Date | string): RgbOrder | null {
   const iso = toIsoDate(leaseStart);
-  const order = ORDERS.find((o) => iso >= o.lease_start_from && iso <= o.lease_start_to);
+  return ORDERS.find((o) => iso >= o.lease_start_from && iso <= o.lease_start_to) ?? null;
+}
+
+export function getIncrease(leaseStart: Date | string, termMonths: LeaseTerm): RgbIncrease | null {
+  const order = getOrder(leaseStart);
   if (!order) return null;
   const pct = termMonths === 12 ? order.one_year_pct : order.two_year_pct;
   return {

@@ -1,3 +1,10 @@
+// ──────────────────────────────────────────────────────────────────────
+// Last stop before the actual model call. complaint.ts's streamComplaint()
+// calls pickProvider() to get a concrete LLMProvider, then calls its
+// .stream() method — this is the only file that decides openai-vs-anthropic;
+// every caller upstream is provider-agnostic.
+// ──────────────────────────────────────────────────────────────────────
+
 import type { LLMProvider } from './types';
 import { openAIProvider } from './openai';
 import { anthropicProvider } from './anthropic';

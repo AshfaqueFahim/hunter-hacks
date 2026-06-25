@@ -21,8 +21,14 @@ export type PdfMeta = {
 
 type Block = { heading: string; lines: string[] };
 
+// Matches the AI drafter's own block delimiters, e.g.
+// "═══ A. FIELD VALUES FOR FORM RA-89 ═══" (see complaint-template.ts's
+// OUTPUT FORMAT section, which is what guarantees these rules exist).
 const BLOCK_RULE = /^═{3,}\s*([A-C])\.\s*(.+?)\s*═{3,}\s*$/;
 
+// Splits the raw AI text into the three named sections (A/B/C). Any text
+// before the first rule is dropped (the model isn't supposed to emit a
+// preamble, but this guards against it slipping one in anyway).
 function parseBlocks(raw: string): Block[] {
   const blocks: Block[] = [];
   let current: Block | null = null;
@@ -85,6 +91,9 @@ function setDraw(doc: jsPDF, c: [number, number, number]) {
  */
 function renderDoc(text: string, meta: PdfMeta): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'letter', compress: true });
+  // Re-parses the raw text on every render call (including every
+  // keystroke when the tenant hand-edits the draft in ComplaintPreview's
+  // "Edit the underlying text" box) — cheap enough not to bother caching.
   const blocks = parseBlocks(text);
 
   let y = MARGIN.top;
@@ -204,7 +213,9 @@ function renderDoc(text: string, meta: PdfMeta): jsPDF {
         continue;
       }
 
-      // Detect §-prefixed field rows (Section A) — render label bold, value normal
+      // Detect §-prefixed field rows (Section A) — render label bold, value normal.
+      // Matches lines like "§9 Current rent: $2,200.00" (see the exact
+      // line shapes block A is told to emit in complaint-template.ts).
       const fieldMatch = softened.match(/^(§\d+[a-z]?)\s+(.+?):\s*(.*)$/);
       if (fieldMatch) {
         const [, sectionTag, label, value] = fieldMatch;
@@ -233,7 +244,9 @@ function renderDoc(text: string, meta: PdfMeta): jsPDF {
         continue;
       }
 
-      // Checklist rows
+      // Checklist rows — matches "  [ ] do this" / "[X] done" lines from
+      // both Section A's §19 evidence boxes and Section C's filing
+      // checklist; draws an actual checkbox glyph instead of literal brackets.
       const checklistMatch = softened.match(/^(\s*)\[\s*([Xx ])\s*\]\s*(.*)$/);
       if (checklistMatch) {
         const [, indent, mark, item] = checklistMatch;
@@ -297,6 +310,7 @@ function renderDoc(text: string, meta: PdfMeta): jsPDF {
   return doc;
 }
 
+// Triggers a browser file-save dialog for the "Companion doc" button.
 export function downloadPdf(text: string, meta: PdfMeta) {
   const doc = renderDoc(text, meta);
   doc.save(`RA-89-packet-${meta.bbl}.pdf`);
@@ -313,6 +327,9 @@ export function renderPdfBlobUrl(text: string, meta: PdfMeta): string {
   return URL.createObjectURL(blob);
 }
 
+// Called on every page (once mid-render per page break, once more at the
+// very end for the last page) — `finalPage` swaps the boilerplate footer
+// text for the "not legal advice" disclaimer on just the last page.
 function drawFooter(doc: jsPDF, finalPage = false) {
   const y = PAGE.h - MARGIN.bottom + 16;
   setDraw(doc, COLORS.rule);

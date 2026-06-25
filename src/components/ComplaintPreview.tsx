@@ -1,8 +1,36 @@
 'use client';
 
+// ──────────────────────────────────────────────────────────────────────
+// ComplaintPreview — Step 4 of the app, "Section IV · Filing packet".
+//
+// This is the component that owns the "Generate my filing packet" button
+// and everything downstream of it. Rendered by src/app/page.tsx once a
+// lookup has come back `likely_stabilized` AND an overcharge estimate
+// exists (see the `stage === 'complaint'` branch in page.tsx).
+//
+// What this component actually produces, end to end:
+//   1. A tenant-facing FORM (state `form` below) collecting the details
+//      the AI drafter and the RA-89 PDF filler both need (name, owner,
+//      tone, which RA-89 §13 causes apply, etc).
+//   2. An AI-DRAFTED THREE-BLOCK TEXT — fetched by streaming POST to
+//      /api/complaint — containing (A) a field cheat-sheet, (B) the
+//      free-form §14 narrative, (C) a filing checklist. See `text` state.
+//   3. A "COMPANION DOC" PDF — a nicely typeset rendering of that same
+//      three-block text, built client-side by src/lib/pdf-export.ts and
+//      shown inline via the `pdfUrl` <iframe>.
+//   4. An OFFICIAL RA-89 PDF — the actual fillable government form,
+//      auto-filled field-by-field by src/lib/ra89-fill.ts (it reuses the
+//      §14 narrative pulled out of the AI text with a regex, see
+//      handleRa89Download below).
+//
+// Everything here is keyed to one BBL and persisted to localStorage so a
+// tenant can leave and come back without re-typing their info.
+// ──────────────────────────────────────────────────────────────────────
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Verdict } from '@/lib/stabilization';
 import type { Estimate } from '@/lib/overcharge';
+import { getOrder } from '@/lib/rgb';
 import type {
   ComplaintInput,
   OverchargeCause,
@@ -19,8 +47,16 @@ type Props = {
   bin?: string;
 };
 
+// Lifecycle of the AI draft: idle (nothing requested yet) → streaming
+// (tokens arriving from /api/complaint) → done (full text in hand, PDF
+// preview renders) → error (request/stream failed, see `error` state).
 type Phase = 'idle' | 'streaming' | 'done' | 'error';
+// Mirrors LLMProvider['name'] in src/lib/providers/types.ts — whichever
+// backend actually served the draft, surfaced in the UI as "via openai".
 type Provider = 'openai' | 'anthropic';
+// Drives the "Owner / managing agent" auto-fill block. Hitting
+// /api/owner-lookup with the building's BIN looks up the registered HPD
+// owner/agent so the tenant doesn't have to dig it out of a lease.
 type OwnerLookupState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -28,6 +64,9 @@ type OwnerLookupState =
   | { status: 'not_found' }
   | { status: 'error'; message: string };
 
+// Everything the tenant can type or toggle in this component. Persisted
+// to localStorage per-BBL (see storageKey below) and is the source for
+// both buildPayload() (→ AI drafter) and handleRa89Download() (→ PDF form).
 type FormState = {
   tenantName: string;
   unit: string;
@@ -50,6 +89,19 @@ type FormState = {
   raisedInCourt: boolean;
   courtIndexNo: string;
   tone: Tone;
+  // "Touched" flags for the required section below. tenantType/scrieDrie/
+  // section8 all default to a legitimate real answer ('prime'/false/
+  // 'none'), so the value alone can't distinguish "the tenant
+  // deliberately chose this" from "untouched default" — these flags
+  // exist purely so the Generate button can require an explicit answer
+  // instead of silently accepting the default. (electricityIncluded
+  // doesn't need one: its default is `null`, which already means
+  // "unanswered"; causes has a real empty state too.) Persisted to
+  // localStorage along with the rest of FormState, so a tenant who
+  // already confirmed these isn't asked again.
+  tenantTypeTouched: boolean;
+  scrieDrieTouched: boolean;
+  section8Touched: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -74,29 +126,36 @@ const EMPTY_FORM: FormState = {
   raisedInCourt: false,
   courtIndexNo: '',
   tone: 'neutral',
+  tenantTypeTouched: false,
+  scrieDrieTouched: false,
+  section8Touched: false,
 };
 
+// Checkbox options for RA-89 §13 ("why are you filing"). The `id`s here
+// are the OverchargeCause union from src/lib/complaint.ts and flow
+// straight through to both the AI prompt and the RA-89 checkbox mapping
+// in src/lib/ra89-fill.ts (search for `Check Box25`..`Check Box31`).
 const CAUSE_OPTIONS: { id: OverchargeCause; label: string }[] = [
-  { id: 'other', label: 'Other (RGB ceiling exceeded)' },
-  { id: 'mci', label: 'MCI increase' },
-  { id: 'iai', label: 'IAI increase' },
-  { id: 'fmra', label: 'FMRA' },
-  { id: 'rent_reduction_order', label: 'Rent Reduction Order outstanding' },
-  { id: 'missing_registrations', label: 'Missing registrations' },
-  { id: 'parking', label: 'Parking charges' },
-  { id: 'illegal_fees', label: 'Illegal fees / surcharges' },
-  { id: 'security_deposit', label: 'Security deposit > 1 month' },
+  { id: 'other', label: 'Other (rent increase above the RGB legal ceiling. Select if there was an overcharge calculated.)' },
+  { id: 'mci', label: 'MCI increase (There was a rent hike because your whole building was improved)' },
+  { id: 'iai', label: 'IAI increase (There was a rent hike because your specific apartment was improved)' },
+  { id: 'fmra', label: 'FMRA (Landlord increased rent before registration)' },
+  { id: 'rent_reduction_order', label: 'Rent Reduction Order outstanding (landlord did not lower rent after DHCR order)' },
+  { id: 'missing_registrations', label: 'Missing registrations (landlord failed to register the rent)' },
+  { id: 'parking', label: 'Parking charges (illegal or excessive parking fees)' },
+  { id: 'illegal_fees', label: 'Illegal fees / surcharges (unauthorized extra charges)' },
+  { id: 'security_deposit', label: 'Security deposit > 1 month (landlord charged more than one month’s deposit)' },
 ];
 
 const inputClass =
   'w-full rounded-[10px] border border-rule bg-bone px-3 py-2.5 text-sm text-ink-text shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] placeholder:text-muted/70 focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/25 disabled:bg-paper-soft';
 
+// One saved draft-form per building — so switching addresses never bleeds
+// one tenant's info into another building's packet.
 const storageKey = (bbl: string) => `ledger:complaint:${bbl}`;
 
 export default function ComplaintPreview({ verdict, estimate, address, bin }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [showCustomize, setShowCustomize] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [ownerLookup, setOwnerLookup] = useState<OwnerLookupState>({ status: 'idle' });
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
@@ -115,6 +174,11 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ─── localStorage hydration ──────────────────────────────────────────
+  // On mount (or when the BBL changes because the user picked a new
+  // address), pull any previously-saved form for THIS building back in.
+  // `hydratedFromStorage` gates the owner-lookup effect and the
+  // save-back effect below so they don't fire before this read completes
+  // (otherwise we'd immediately overwrite the saved draft with blanks).
   useEffect(() => {
     if (!verdict.bbl) return;
     try {
@@ -131,6 +195,9 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     }
   }, [verdict.bbl]);
 
+  // Mirror image of the hydration effect: every time the form changes,
+  // write it straight back to localStorage so the draft survives a
+  // refresh or a trip to a different stage of the app.
   useEffect(() => {
     if (!hydratedFromStorage || !verdict.bbl) return;
     try {
@@ -141,6 +208,10 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
   }, [form, verdict.bbl, hydratedFromStorage]);
 
   // ─── HPD owner auto-lookup ───────────────────────────────────────────
+  // Fires once per building (keyed on `bin`), but only if the tenant
+  // hasn't already typed (or restored from storage) an owner name/address
+  // — we never want to clobber a manual entry. Hits GET /api/owner-lookup,
+  // which wraps src/lib/hpd.ts's NYC Open Data HPD registration lookup.
   useEffect(() => {
     if (!bin) return;
     if (form.ownerName.trim().length > 0 || form.ownerAddress.trim().length > 0) return;
@@ -225,10 +296,13 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
   }, [phase, text, address, verdict.bbl, form.tenantName, form.unit]);
 
   // ─── form helpers ────────────────────────────────────────────────────
+  // Generic setter used by every <Input>/<Select>/<Toggle> below.
   const updateForm = useCallback(<K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((prev) => ({ ...prev, [k]: v }));
   }, []);
 
+  // Checkbox-list toggle for the RA-89 §13 "causes" — adds/removes one
+  // cause id from the array rather than replacing the whole list.
   const toggleCause = (id: OverchargeCause) => {
     setForm((prev) => {
       const has = prev.causes.includes(id);
@@ -236,6 +310,11 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     });
   };
 
+  // Converts the raw `form` state into the shape /api/complaint expects
+  // (ComplaintInput, minus the verdict/estimate/address the caller already
+  // has). Empty strings are normalized to `undefined` so the server's
+  // buildFieldMap() (src/lib/complaint.ts) can apply its own placeholder
+  // defaults instead of drafting around an empty string.
   const buildPayload = useCallback((): Omit<ComplaintInput, 'verdict' | 'estimate' | 'address'> => ({
     tenantName: form.tenantName.trim() || undefined,
     unit: form.unit.trim() || undefined,
@@ -259,6 +338,9 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     tone: form.tone,
   }), [form]);
 
+  // Drives the "Still missing: …" hint shown above the Generate button —
+  // purely informational, does NOT block drafting (the AI just leaves
+  // bracketed placeholders like "[ASK TENANT]" for whatever's absent).
   const missing = useMemo(() => {
     const out: string[] = [];
     if (!form.tenantName.trim()) out.push('your name');
@@ -267,8 +349,53 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     return out;
   }, [form]);
 
+  // Unlike `missing` above (informational only — drafting proceeds with
+  // blanks), every item here actually BLOCKS the Generate button: the
+  // "Required details" card (tenant type, SCRIE/DRIE, Section 8,
+  // electricity) plus the §13 causes checklist. "Raised in court" is
+  // deliberately NOT in this list — that one stays optional, default
+  // "No" is an acceptable answer on its own.
+  //
+  // tenantType/scrieDrie/section8 all default to a legitimate real
+  // answer ('prime'/false/'none'), so completion is tracked via the
+  // *Touched flags on FormState rather than the value itself (see the
+  // comment on those flags' declaration above). electricityIncluded
+  // doesn't need a touched flag: its default is `null`, which already
+  // means "unanswered". causes has a real empty state (the tenant
+  // unchecked everything), so a length check is enough there.
+  const requiredMissing = useMemo(() => {
+    const out: string[] = [];
+    if (!form.tenantTypeTouched) out.push('tenant type');
+    if (!form.scrieDrieTouched) out.push('SCRIE/DRIE status');
+    if (!form.section8Touched) out.push('Section 8 status');
+    if (form.electricityIncluded === null) out.push('electricity in rent');
+    if (form.causes.length === 0) out.push('at least one cause (§13)');
+    return out;
+  }, [form]);
+
   // ─── stream call ─────────────────────────────────────────────────────
+  // THIS is what the "Generate my filing packet" button calls.
+  //
+  // Flow: POST the verdict + overcharge estimate + everything the tenant
+  // typed to /api/complaint (src/app/api/complaint/route.ts), which
+  // validates it, forwards it to whichever LLM provider is configured
+  // (src/lib/complaint.ts → src/lib/providers/*), and streams the answer
+  // back as newline-delimited JSON (NDJSON) — one line per event, NOT a
+  // single JSON blob, so the UI can render tokens as they arrive instead
+  // of waiting for the whole ~30s draft to finish.
+  //
+  // Event shapes (mirror the comment atop the route handler):
+  //   { type: 'provider', data: 'openai' | 'anthropic' }  — sent once, first
+  //   { type: 'text', data: '<delta>' }                   — repeated, appended to `text`
+  //   { type: 'error', data: '<message>' }                — stream failed mid-way
+  //   { type: 'done' }                                     — (route sends this; loop just exits on stream close)
   async function handleDraft() {
+    // Belt-and-suspenders: the Generate/Redraft button is already
+    // disabled while requiredMissing is non-empty, but guard here too in
+    // case this is ever wired to something else (e.g. a keyboard submit).
+    if (requiredMissing.length > 0) return;
+    // Re-entrant: clicking Generate/Redraft while a previous stream is
+    // still running aborts the old one first.
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -292,6 +419,10 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
         const detail = errorBody.details ? ` — ${JSON.stringify(errorBody.details)}` : '';
         throw new Error((errorBody.error ?? `Request failed with status ${res.status}`) + detail);
       }
+      // Manual NDJSON parser: read raw bytes off the response body,
+      // decode to text, and split on '\n' — fetch's streaming body API
+      // gives us chunks of bytes that don't necessarily land on line
+      // boundaries, so we buffer partial lines across reads.
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -325,6 +456,9 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     }
   }
 
+  // Cancels an in-flight draft. If text has already streamed in, we keep
+  // it and flip to 'done' rather than discarding a partial draft (see
+  // the AbortError branch in handleDraft's catch).
   function handleStop() { abortRef.current?.abort(); }
 
   async function handleCopy() {
@@ -336,6 +470,9 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     } catch (err) { console.error('Copy failed:', err); }
   }
 
+  // "Companion doc" download — re-renders the same three-block AI text
+  // shown in the <iframe> preview into a standalone PDF file (vs. just
+  // grabbing the already-rendered blob) via src/lib/pdf-export.ts.
   function handleDownload() {
     if (!text) return;
     downloadPdf(text, {
@@ -346,6 +483,10 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     });
   }
 
+  // Shared subject/body for both email exit-paths below. Note this does
+  // NOT attach the PDF — mail-client links can't carry attachments, so
+  // the body explicitly tells the tenant to attach the file they just
+  // downloaded.
   function buildEmail(): { subject: string; body: string } {
     const subject = `RA-89 Filing Packet — ${address.split(',')[0]}`;
     const body = [
@@ -371,14 +512,27 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
+  // ─── Fill the OFFICIAL government PDF ────────────────────────────────
+  // The "Download RA-89 (filled)" button. Distinct from handleDownload()
+  // above: that one re-typesets the AI's free-form text into a companion
+  // PDF; THIS one takes the real, fillable RA-89 AcroForm (a static file
+  // under /public, loaded inside ra89-fill.ts) and programmatically fills
+  // its named text/checkbox fields with structured form data — the AI
+  // text is only consulted for one thing: the §14 narrative paragraph.
   async function handleRa89Download() {
     if (!text) return;
     setRa89Filling(true);
     setRa89Error(null);
     try {
+      // Dynamically imported (rather than a top-level import) because
+      // pdf-lib + the template fetch are only ever needed once the draft
+      // is done — keeps it out of the initial bundle.
       const { fillRa89Form, downloadRa89 } = await import('@/lib/ra89-fill');
 
-      // Extract block B (§14 narrative) from the AI draft
+      // Extract block B (§14 narrative) from the AI draft. The draft's
+      // three blocks are delimited by "═══ A. ... ═══" rules (see
+      // COMPLAINT_SYSTEM_PROMPT in complaint-template.ts); this regex
+      // grabs everything between the "B." rule and the next rule (or EOF).
       const narrativeMatch = text.match(/═{3,}[^═]*B\.[^═]*═{3,}([\s\S]*?)(?:═{3,}|$)/);
       const narrative = narrativeMatch ? narrativeMatch[1].trim() : '';
 
@@ -423,6 +577,12 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
   const isStreaming = phase === 'streaming';
   const isDone = phase === 'done';
 
+  const mostRecentLease = estimate.years_analyzed[estimate.years_analyzed.length - 1];
+  let showFutureLeaseWarning = false;
+  if (mostRecentLease && getOrder(mostRecentLease.lease_start) === null) {
+    showFutureLeaseWarning = true;
+  }
+
   // ─── render ──────────────────────────────────────────────────────────
   return (
     <section className="paper relative overflow-hidden animate-fade-in-up">
@@ -449,6 +609,39 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
         {/* ═══════════════════════════════════════════════════════════════ */}
         {!isDone && (
           <>
+            {showFutureLeaseWarning && (
+              <div className="mt-6 rounded-[14px] border border-rust/30 bg-rust-wash/10 px-5 py-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="eyebrow text-rust">Important</span>
+                  <span className="h-px flex-1 bg-rust/30" />
+                </div>
+                <p className="text-sm text-secondary">
+                  You can still draft an RA-89 packet now, but if your new lease has not started yet, this is only a projection. The form will only matter once the new lease begins.
+                </p>
+                <div className="mt-4 rounded-[12px] border border-rule bg-bone p-4 text-sm text-ink-text space-y-3">
+                  <p className="font-semibold">What to do now:</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>
+                      <strong>Document everything.</strong>
+                      Keep the signed lease, any rent increase notices, and the date the new rent starts. Get your DHCR rent history (Form REC-1).
+                    </li>
+                    <li>
+                      <strong>Try to fix it before the lease starts.</strong>
+                      Ask the landlord to renegotiate the rent or remove the increase. If you haven’t moved in yet, you may be able to back out or delay the start depending on local tenant law.
+                    </li>
+                    <li>
+                      <strong>Prepare to file later.</strong>
+                      If the new lease actually starts and you begin paying the higher rent, then the overcharge can become actionable. The complaint would cover the period after the lease starts, not the weeks before it.
+                    </li>
+                    <li>
+                      <strong>Seek advice.</strong>
+                      Talk to a tenant counselor, legal aid, or tenant union in NYC. They can tell you whether the lease is binding and whether there’s a path to cancel or renegotiate.
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 rounded-[14px] border border-brass/30 bg-brass-wash/40 px-5 py-5">
               <div className="flex items-center gap-2 mb-3">
                 <span className="eyebrow text-brass-deep">Quick fill</span>
@@ -478,18 +671,12 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowCustomize((v) => !v)}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brass-deep hover:text-brass"
-            >
-              <span>{showCustomize ? '−' : '+'}</span>
+            <div className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-brass-deep">
               <span>Customize</span>
               <span className="text-xs font-normal text-muted">(unit, mailing address, tone, causes…)</span>
-            </button>
+            </div>
 
-            {showCustomize && (
-              <div className="mt-3 space-y-3 animate-fade-in-up">
+            <div className="mt-3 space-y-3">
                 <Card kicker="More about you">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input label="Apartment unit" value={form.unit} onChange={(v) => updateForm('unit', v)} placeholder="4B" />
@@ -520,7 +707,10 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
                   </div>
                 </Card>
 
-                <Card kicker="Causes (RA-89 §13)">
+                <Card kicker="Causes (RA-89 §13) — required">
+                  <p className="text-xs text-secondary mb-3">
+                    A cause is the reason you are filing the RA-89 complaint. Check at least one option that matches why your rent or charges are wrong.
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {CAUSE_OPTIONS.map((opt) => {
                       const active = form.causes.includes(opt.id);
@@ -534,45 +724,48 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
                   </div>
                 </Card>
 
-                <button type="button" onClick={() => setShowAdvanced((v) => !v)} className="text-xs font-semibold text-brass-deep hover:text-brass">
-                  {showAdvanced ? '− Hide' : '+ Show'} advanced (tenant type, SCRIE/DRIE, Section 8, electricity, court history)
-                </button>
-                {showAdvanced && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Select label="Tenant type" value={form.tenantType} onChange={(v) => updateForm('tenantType', v as TenantType)} options={[
-                        { v: 'prime', l: 'Prime tenant' },
-                        { v: 'sub', l: 'Sub-tenant' },
-                        { v: 'roommate', l: 'Roommate' },
-                        { v: 'hotel', l: 'Hotel / SRO tenant' },
-                      ]} />
-                      <Select label="Section 8" value={form.section8} onChange={(v) => updateForm('section8', v as Section8Program)} options={[
-                        { v: 'none', l: 'None' },
-                        { v: 'hud', l: 'HUD' },
-                        { v: 'nycha', l: 'NYCHA' },
-                        { v: 'hcv', l: 'Housing Choice Voucher' },
-                        { v: 'hpd', l: 'HPD' },
-                      ]} />
-                      <Select label="Electricity in rent" value={form.electricityIncluded === null ? '' : form.electricityIncluded ? 'yes' : 'no'} onChange={(v) => updateForm('electricityIncluded', v === '' ? null : v === 'yes')} options={[
-                        { v: '', l: '— not specified —' },
-                        { v: 'yes', l: 'Yes, included' },
-                        { v: 'no', l: 'No, billed separately' },
-                      ]} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <Toggle label="SCRIE / DRIE recipient" value={form.scrieDrie} onChange={(v) => updateForm('scrieDrie', v)} />
-                      <Toggle label="Co-op apartment" value={form.coop} onChange={(v) => updateForm('coop', v)} />
-                    </div>
-                    <div className="rounded-[10px] border border-rule bg-paper-soft px-3 py-3">
-                      <Toggle label="This complaint has been raised in court" value={form.raisedInCourt} onChange={(v) => updateForm('raisedInCourt', v)} />
-                      {form.raisedInCourt && (
-                        <div className="mt-2"><Input label="Court Index No." value={form.courtIndexNo} onChange={(v) => updateForm('courtIndexNo', v)} placeholder="e.g. LT-12345-25" /></div>
-                      )}
-                    </div>
+                {/* Always rendered (not collapsible) — every field here is
+                    required before Generate will run; see requiredMissing. */}
+                <Card kicker="Required (tenant type, SCRIE/DRIE, Section 8, electricity)">
+                  <p className="text-xs text-secondary mb-3">
+                    These affect which RA-89 boxes get checked — answer every one, even if the answer is &quot;No&quot;.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Select label="Tenant type *" value={form.tenantType} onChange={(v) => setForm((prev) => ({ ...prev, tenantType: v as TenantType, tenantTypeTouched: true }))} options={[
+                      { v: 'prime', l: 'Prime tenant' },
+                      { v: 'sub', l: 'Sub-tenant' },
+                      { v: 'roommate', l: 'Roommate' },
+                      { v: 'hotel', l: 'Hotel / SRO tenant' },
+                    ]} />
+                    <Select label="Section 8 *" value={form.section8} onChange={(v) => setForm((prev) => ({ ...prev, section8: v as Section8Program, section8Touched: true }))} options={[
+                      { v: 'none', l: 'None' },
+                      { v: 'hud', l: 'HUD' },
+                      { v: 'nycha', l: 'NYCHA' },
+                      { v: 'hcv', l: 'Housing Choice Voucher' },
+                      { v: 'hpd', l: 'HPD' },
+                    ]} />
+                    <Select label="Electricity in rent *" value={form.electricityIncluded === null ? '' : form.electricityIncluded ? 'yes' : 'no'} onChange={(v) => updateForm('electricityIncluded', v === '' ? null : v === 'yes')} options={[
+                      { v: '', l: '— select one —' },
+                      { v: 'yes', l: 'Yes, included' },
+                      { v: 'no', l: 'No, billed separately' },
+                    ]} />
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <Toggle label="SCRIE / DRIE recipient *" value={form.scrieDrie} onChange={(v) => setForm((prev) => ({ ...prev, scrieDrie: v, scrieDrieTouched: true }))} />
+                    <Toggle label="Co-op apartment" value={form.coop} onChange={(v) => updateForm('coop', v)} />
+                  </div>
+                </Card>
+
+                {/* Optional — does NOT block Generate. Default "No" is a
+                    fine answer on its own; the index # is only useful (and
+                    only shown) once the tenant says Yes. */}
+                <div className="rounded-[10px] border border-rule bg-paper-soft px-3 py-3">
+                  <Toggle label="This complaint has been raised in court" value={form.raisedInCourt} onChange={(v) => updateForm('raisedInCourt', v)} />
+                  {form.raisedInCourt && (
+                    <div className="mt-2"><Input label="Court Index No." value={form.courtIndexNo} onChange={(v) => updateForm('courtIndexNo', v)} placeholder="e.g. LT-12345-25" optional /></div>
+                  )}
+                </div>
+            </div>
 
             {missing.length > 0 && (
               <div className="mt-4 flex items-start gap-2 text-xs text-secondary">
@@ -581,8 +774,25 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
               </div>
             )}
 
+            {/* Unlike the soft hint above, this one BLOCKS Generate — see
+                requiredMissing. Shown once here (rather than inside each
+                card) since the missing items can come from either the
+                causes checklist or the "Required" details card above. */}
+            {requiredMissing.length > 0 && (
+              <div className="mt-3 flex items-start gap-2 text-xs">
+                <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rust text-bone font-bold text-[10px] flex-shrink-0">!</span>
+                <span className="text-rust">Still required: <span className="font-semibold">{requiredMissing.join(', ')}</span>.</span>
+              </div>
+            )}
+
             <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={handleDraft} disabled={isStreaming} className="btn-brass px-6 py-3 text-sm flex items-center gap-2 disabled:cursor-not-allowed">
+              <button
+                type="button"
+                onClick={handleDraft}
+                disabled={isStreaming || requiredMissing.length > 0}
+                title={requiredMissing.length > 0 ? `Still required: ${requiredMissing.join(', ')}` : undefined}
+                className="btn-brass px-6 py-3 text-sm flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 {isStreaming ? (
                   <>
                     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">

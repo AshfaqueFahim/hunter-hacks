@@ -1,3 +1,17 @@
+// ──────────────────────────────────────────────────────────────────────
+// Fills the REAL, official DHCR RA-89 PDF (an AcroForm — a PDF with
+// named, programmatically-fillable fields) using pdf-lib. Only called
+// client-side, from ComplaintPreview.tsx's handleRa89Download(), and only
+// after an AI draft already exists (its §14 narrative is reused here).
+//
+// The field NAMES below ('Tenant's Last Name First Name Middle Initial',
+// 'Check Box5', etc.) are NOT made up — they're whatever names the
+// official PDF's form fields happen to have, extracted by running
+// scripts/inspect-ra89-fields.ts against public/ra-89-template.pdf. If
+// DHCR ever reissues the form with different field names, that script is
+// the way to re-discover them; this file would need updating to match.
+// ──────────────────────────────────────────────────────────────────────
+
 import { PDFDocument } from 'pdf-lib';
 import type { Estimate } from './overcharge';
 
@@ -51,6 +65,9 @@ export type Ra89Input = {
   estimate: Estimate;
 };
 
+// Swallows "field doesn't exist" / "wrong field type" errors on purpose
+// — if DHCR's PDF is missing a field we expect, we'd rather silently
+// skip that one value than blow up the whole fill for every other field.
 function set(form: Awaited<ReturnType<typeof PDFDocument.prototype.getForm>>, name: string, value: string) {
   try { form.getTextField(name).setText(value); } catch { /* field absent or wrong type */ }
 }
@@ -62,16 +79,26 @@ function check(form: Awaited<ReturnType<typeof PDFDocument.prototype.getForm>>, 
   } catch { /* skip */ }
 }
 
+// RA-89's date fields are three separate boxes (Month / Day / Year), not
+// one text field — this breaks an ISO "YYYY-MM-DD" string into the three
+// pieces each `s(...)` call below needs.
 function splitIso(iso: string | undefined): { m: string; d: string; y: string } {
   if (!iso) return { m: '', d: '', y: '' };
   const [y, m, d] = iso.split('-');
   return { m: m ?? '', d: d ?? '', y: y ?? '' };
 }
 
+// "$1,234.56" formatting for every dollar amount written into the form.
 function usd(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// THE function handleRa89Download() calls. Loads the static template PDF
+// shipped in /public, fills it field-by-field from `input` (which is
+// built by ComplaintPreview.tsx from the same `form` state used for the
+// AI draft, plus the extracted §14 narrative), and returns the filled
+// PDF's raw bytes — saving/downloading is the caller's job
+// (see downloadRa89 at the bottom of this file).
 export async function fillRa89Form(input: Ra89Input): Promise<Uint8Array> {
   const res = await fetch('/ra-89-template.pdf');
   if (!res.ok) throw new Error('Could not load RA-89 template PDF');
@@ -79,6 +106,9 @@ export async function fillRa89Form(input: Ra89Input): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(buf);
   const form = pdfDoc.getForm();
 
+  // Short aliases used for every field write below — `s` for a text
+  // field, `c` for a checkbox. Keeps the section-by-section mapping that
+  // follows readable as a flat list of "field name → value" pairs.
   const s = (name: string, value: string) => set(form, name, value);
   const c = (name: string, on: boolean) => check(form, name, on);
 
@@ -126,13 +156,19 @@ export async function fillRa89Form(input: Ra89Input): Promise<Uint8Array> {
   c('Check Box17', !input.coop);
 
   // ── §8 Move-in ──────────────────────────────────────────────────────
-  const firstLease = input.estimate.years_analyzed[0];
-  const moveIn = input.moveInDate ?? firstLease?.lease_start;
+  // The true first lease is `estimate.baseline_lease`, NOT
+  // `years_analyzed[0]` — overcharge.ts's estimate() reserves the
+  // tenant's very first lease as the legal-rent baseline and starts
+  // years_analyzed at the SECOND lease, so years_analyzed[0] is one
+  // lease too late for "when did you move in / what did you pay."
+  const baseline = input.estimate.baseline_lease;
+  const moveIn = input.moveInDate ?? baseline?.lease_start;
   const mi = splitIso(moveIn);
   s('Month', mi.m);
   s('Day', mi.d);
   s('Year', mi.y);
-  if (input.initialRent) s('rent', usd(input.initialRent));
+  const initialRent = input.initialRent ?? baseline?.monthly_rent;
+  if (initialRent) s('rent', usd(initialRent));
 
   // ── §9 Current rent ─────────────────────────────────────────────────
   s('My current rent is', usd(input.estimate.actual_rent_monthly));
@@ -212,9 +248,15 @@ export async function fillRa89Form(input: Ra89Input): Promise<Uint8Array> {
   // ── Signature date (page 4) — leave signature line blank ────────────
   s('Date', new Date().toLocaleDateString('en-US'));
 
+  // `updateFieldAppearances: false` skips pdf-lib's (slow, occasionally
+  // glitchy) re-rendering of each field's visual appearance — the PDF
+  // viewer regenerates them from the field value anyway when it opens
+  // the file, so this is purely a save-time perf/robustness trade.
   return pdfDoc.save({ updateFieldAppearances: false });
 }
 
+// Browser-only "save this Uint8Array as a file" — wraps it in a Blob,
+// makes a temporary object URL, and fakes a click on an <a download>.
 export function downloadRa89(bytes: Uint8Array, bbl: string) {
   const blob = new Blob([bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
