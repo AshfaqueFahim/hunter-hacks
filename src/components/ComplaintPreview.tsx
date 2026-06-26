@@ -154,6 +154,20 @@ const inputClass =
 // one tenant's info into another building's packet.
 const storageKey = (bbl: string) => `ledger:complaint:${bbl}`;
 
+// `address` is GeoSearch's `label`, always shaped "{street}, {city},
+// {state}, USA" (e.g. "350 WEST 50 STREET, New York, NY, USA" or, for
+// Queens, "..., Jamaica, NY, USA" — GeoSearch already picks the correct
+// USPS city per neighborhood). Used as the city/state fallback for the
+// RA-89's §2-3 mailing address when it's the same as the subject
+// building, since the tenant never gets a city/state input to fill in
+// for that case. Note this string never carries a ZIP — see
+// Verdict.zipcode in stabilization.ts for that piece.
+function cityStateFromAddress(addr: string): { city?: string; state?: string } {
+  const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 3) return {};
+  return { city: parts[parts.length - 3], state: parts[parts.length - 2] };
+}
+
 export default function ComplaintPreview({ verdict, estimate, address, bin }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [showRaw, setShowRaw] = useState(false);
@@ -536,13 +550,21 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
       const narrativeMatch = text.match(/═{3,}[^═]*B\.[^═]*═{3,}([\s\S]*?)(?:═{3,}|$)/);
       const narrative = narrativeMatch ? narrativeMatch[1].trim() : '';
 
+      // When the mailing address IS the subject building, the tenant
+      // never sees city/state/ZIP inputs (see the "Mailing address is the
+      // same..." checkbox above) — so without a fallback, §2-3's "City
+      // State Zip Code" field on the PDF was coming out blank. Fall back
+      // to the building's own city/state (parsed out of `address`) and
+      // ZIP (from the BBL-keyed buildings row, via `verdict.zipcode`).
+      const buildingCityState = form.mailingSameAsBuilding ? cityStateFromAddress(address) : {};
+
       const bytes = await fillRa89Form({
         tenantName: form.tenantName.trim() || undefined,
         unit: form.unit.trim() || undefined,
         mailingAddress: form.mailingSameAsBuilding ? undefined : form.mailingAddress.trim() || undefined,
-        mailingCity: form.mailingSameAsBuilding ? undefined : form.mailingCity.trim() || undefined,
-        mailingState: form.mailingSameAsBuilding ? undefined : form.mailingState.trim() || undefined,
-        mailingZip: form.mailingSameAsBuilding ? undefined : form.mailingZip.trim() || undefined,
+        mailingCity: form.mailingSameAsBuilding ? buildingCityState.city : form.mailingCity.trim() || undefined,
+        mailingState: form.mailingSameAsBuilding ? buildingCityState.state : form.mailingState.trim() || undefined,
+        mailingZip: form.mailingSameAsBuilding ? verdict.zipcode : form.mailingZip.trim() || undefined,
         address,
         phoneHome: form.phoneHome.trim() || undefined,
         phoneDay: form.phoneDay.trim() || undefined,

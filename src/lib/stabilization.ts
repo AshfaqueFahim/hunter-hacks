@@ -10,6 +10,11 @@ export type Verdict = {
   on_dhcr_list_latest: boolean;
   source_year_max?: number;
   dhcr_verify_url: string;
+  // The building's ZIP, straight off the DOF-sourced row keyed by BBL.
+  // The GeoSearch autocomplete address string never includes a ZIP (its
+  // `label` is "{street}, {city}, {state}, USA"), so this is the only
+  // place a default mailing ZIP for the subject building comes from.
+  zipcode?: string;
 };
 
 const DHCR_URL = 'https://apps.hcr.ny.gov/BuildingSearch/default.aspx';
@@ -38,5 +43,6 @@ export function verdict(bbl: string): Verdict {
     on_dhcr_list_latest: row.onDhcrListLatest === 1,
     source_year_max: row.sourceYearMax ?? undefined,
     dhcr_verify_url: DHCR_URL,
+    zipcode: row.zipcode ?? undefined,
   };
 }
