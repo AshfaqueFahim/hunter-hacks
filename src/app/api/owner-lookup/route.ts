@@ -20,10 +20,7 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const parsed = QuerySchema.safeParse({ bin: url.searchParams.get('bin') ?? '' });
   if (!parsed.success) {
-    return Response.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
-      { status: 422 },
-    );
+    return Response.json({ error: 'Validation failed' }, { status: 422 });
   }
 
   try {

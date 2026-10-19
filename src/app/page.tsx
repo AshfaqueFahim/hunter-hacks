@@ -9,6 +9,7 @@ import ResultCard from '@/components/ResultCard';
 import RentHistoryForm from '@/components/RentHistoryForm';
 import OverchargeSummary from '@/components/OverchargeSummary';
 import ComplaintPreview from '@/components/ComplaintPreview';
+import FeedbackPrompt from '@/components/FeedbackPrompt';
 import Footer from '@/components/Footer';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import StageStepper, { type Stage } from '@/components/StageStepper';
@@ -16,6 +17,12 @@ import { useI18n } from '@/lib/i18n';
 import type { GeoResult } from '@/lib/geosearch';
 import type { Verdict } from '@/lib/stabilization';
 import type { Estimate, LeaseEntry } from '@/lib/overcharge';
+import { orderCount } from '@/lib/rgb';
+import {
+  trackLookupRun,
+  trackOverchargeCalculated,
+  trackVerdictShown,
+} from '@/lib/analytics';
 
 const CityMap3D = dynamic(() => import('@/components/CityMap3D'), { ssr: false });
 
@@ -105,6 +112,7 @@ export default function Home() {
     setEstimateError(null);
     setFallbackRevealed(false);
     setIsLooking(true);
+    trackLookupRun();
 
     try {
       const res = await fetch('/api/lookup', {
@@ -118,8 +126,10 @@ export default function Home() {
       }
       const data = (await res.json()) as LookupResponse;
       setLookup(data);
+      trackVerdictShown(data.bbl, data.status === 'likely_stabilized' ? 'stabilized' : 'not_found');
     } catch (err) {
       console.error('Lookup failed:', err);
+      trackVerdictShown(result.bbl, 'error');
       setLookupError(err instanceof Error ? err.message : t('error.generic'));
     } finally {
       setIsLooking(false);
@@ -143,6 +153,7 @@ export default function Home() {
       }
       const data = (await res.json()) as Estimate;
       setEstimate(data);
+      trackOverchargeCalculated(lookup.bbl);
     } catch (err) {
       console.error('Estimate failed:', err);
       setEstimateError(
@@ -325,7 +336,7 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-3 pt-2">
                 <Stat n="~1M" l={t('hero.stat.units')} />
                 <Stat n="6 yr" l={t('hero.stat.window')} />
-                <Stat n="57" l={t('hero.stat.orders')} />
+                <Stat n={String(orderCount())} l={t('hero.stat.orders')} />
               </div>
             </div>
           </div>
@@ -367,6 +378,7 @@ export default function Home() {
         {visibleLookup && selectedResult && (
           <div ref={verdictRef}>
             <ResultCard verdict={visibleLookup} address={selectedResult.label} />
+            <FeedbackPrompt key={visibleLookup.bbl} context="verdict" className="mt-3" />
           </div>
         )}
 

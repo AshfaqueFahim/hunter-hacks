@@ -68,7 +68,7 @@ function listDirSafe(dir: string, depth = 1): string[] {
   return out.slice(0, 60);
 }
 
-export function debugDbBundle() {
+export function dbBundleDiagnostics() {
   const { tried, found } = findBundledDb();
   return {
     cwd: process.cwd(),

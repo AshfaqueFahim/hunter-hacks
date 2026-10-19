@@ -32,10 +32,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
-      { status: 422 },
-    );
+    return Response.json({ error: 'Validation failed' }, { status: 422 });
   }
 
   const { history, lookupId, asOfDate } = parsed.data;

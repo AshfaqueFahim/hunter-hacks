@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { verdict } from '@/lib/stabilization';
-import { debugDbBundle, getDb } from '@/lib/db';
+import { dbBundleDiagnostics, getDb } from '@/lib/db';
 import { lookups } from '@/lib/schema';
 
 const RequestSchema = z.object({
@@ -18,10 +18,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
-      { status: 422 },
-    );
+    return Response.json({ error: 'Validation failed' }, { status: 422 });
   }
 
   const { bbl } = parsed.data;
@@ -30,21 +27,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     result = verdict(bbl);
   } catch (err) {
-    const debug = debugDbBundle();
-    console.error('verdict() failed:', {
-      bbl,
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-      debug,
-    });
-    return Response.json(
-      {
-        error: 'Lookup failed',
-        message: err instanceof Error ? err.message : String(err),
-        debug,
-      },
-      { status: 500 },
-    );
+    // Details (including the DB bundle state) go to server logs only —
+    // the client gets a generic message.
+    console.error('verdict() failed:', { bbl, err, db: dbBundleDiagnostics() });
+    return Response.json({ error: 'Lookup failed' }, { status: 500 });
   }
 
   let lookupId: number | undefined;

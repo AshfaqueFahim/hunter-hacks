@@ -8,11 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "feedback:contacts": "tsx scripts/feedback-contacts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
-    "@vercel/analytics": "^2.0.1",
     "better-sqlite3": "^12.9.0",
     "csv-parse": "^6.2.1",
     "drizzle-orm": "^0.45.2",

@@ -5,6 +5,8 @@ import {
   activeProviderName,
   type ComplaintInput,
 } from '@/lib/complaint';
+import { getStore } from '@/lib/kv';
+import { DRAFTS_PER_HOUR, checkDailyAiCap, checkRateLimit, clientIpKey } from '@/lib/limits';
 
 // ──────────────────────────────────────────────────────────────────────
 // POST /api/complaint — second stop on the "Generate my filing packet"
@@ -169,13 +171,8 @@ export async function POST(request: Request): Promise<Response> {
   // 503 instead of an awkward "stream that opens then immediately errors".
   const provider = activeProviderName();
   if (!provider) {
-    return Response.json(
-      {
-        error:
-          'No LLM provider configured. Set OPENAI_API_KEY (preferred) or ANTHROPIC_API_KEY in .env.local.',
-      },
-      { status: 503 },
-    );
+    console.error('No LLM provider configured: set OPENAI_API_KEY (preferred) or ANTHROPIC_API_KEY.');
+    return Response.json({ error: 'Drafting is unavailable right now.' }, { status: 503 });
   }
 
   let body: unknown;
@@ -191,9 +188,26 @@ export async function POST(request: Request): Promise<Response> {
   // 422 — it never reaches buildFieldMap/streamComplaint below.
   const parsed = RequestSchema.safeParse(body);
   if (!parsed.success) {
+    return Response.json({ error: 'Validation failed' }, { status: 422 });
+  }
+
+  // Abuse + cost guards, checked only for valid requests that would actually
+  // reach the model. Per-IP first, so one heavy user can't burn the global
+  // daily cap for everyone. The client shows a translated message per `code`.
+  const store = getStore();
+  const perIp = await checkRateLimit(store, 'draft', clientIpKey(request), DRAFTS_PER_HOUR, 3600);
+  if (!perIp.ok) {
     return Response.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
-      { status: 422 },
+      { error: 'Too many drafts. Please try again later.', code: 'rate_limited' },
+      { status: 429, headers: { 'Retry-After': '3600' } },
+    );
+  }
+  const daily = await checkDailyAiCap(store);
+  if (!daily.ok) {
+    console.warn(`AI daily cap reached (${daily.limit}); refusing draft.`);
+    return Response.json(
+      { error: 'Drafting is paused for today. Please try again tomorrow.', code: 'daily_cap' },
+      { status: 503 },
     );
   }
 

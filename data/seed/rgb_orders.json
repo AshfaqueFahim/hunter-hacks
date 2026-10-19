@@ -1,5 +1,13 @@
 [
   {
+    "order_no": 58,
+    "lease_start_from": "2026-10-01",
+    "lease_start_to": "2027-09-30",
+    "one_year_pct": 0.0,
+    "two_year_pct": 0.0,
+    "notes": "Rent freeze adopted June 25, 2026 — first 0% on both one- and two-year leases. HSTPA: no vacancy allowance."
+  },
+  {
     "order_no": 57,
     "lease_start_from": "2025-10-01",
     "lease_start_to": "2026-09-30",

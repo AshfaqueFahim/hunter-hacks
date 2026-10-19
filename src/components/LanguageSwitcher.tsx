@@ -1,6 +1,7 @@
 'use client';
 
 import { useI18n, LOCALES, type Locale } from '@/lib/i18n';
+import { trackLanguageChanged } from '@/lib/analytics';
 
 /**
  * Compact language selector — lives in the sticky header of every page so
@@ -27,7 +28,10 @@ export default function LanguageSwitcher() {
       </svg>
       <select
         value={locale}
-        onChange={(e) => setLocale(e.target.value as Locale)}
+        onChange={(e) => {
+          setLocale(e.target.value as Locale);
+          trackLanguageChanged(e.target.value);
+        }}
         className="rounded-md border border-rule bg-bone px-2 py-1 text-xs font-medium text-secondary hover:border-rule-strong focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/25 cursor-pointer"
         aria-label={t('nav.language')}
       >

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import Footer from '@/components/Footer';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n';
+import { latestOrderNo } from '@/lib/rgb';
 
 /* ============================================================================
    /info — an editorial, scrollytelling explanation of NYC rent stabilization.
@@ -851,7 +852,7 @@ export default function InfoStory() {
             title="Walk the rent forward"
             body={
               <>
-                If you enter a lease history, we apply Rent Guidelines Board orders #1–#57 to
+                If you enter a lease history, we apply Rent Guidelines Board orders #1–#{latestOrderNo()} to
                 compute the legal renewal rent at every step and flag where the actual rent went
                 higher.
               </>
@@ -934,7 +935,7 @@ export default function InfoStory() {
           <SourceLine
             href="https://rentguidelinesboard.cityofnewyork.us/"
             title="Rent Guidelines Board"
-            note="Sets the annual legal renewal increases (Apartment Orders #1–#57)."
+            note={`Sets the annual legal renewal increases (Apartment Orders #1–#${latestOrderNo()}).`}
           />
           <SourceLine
             href="https://hcr.ny.gov/form-ra-89"
@@ -947,6 +948,12 @@ export default function InfoStory() {
             note="Free tenant counseling — call before you file."
           />
         </div>
+        <p className="mt-6 text-[12px] leading-relaxed text-muted">
+          Privacy: we count anonymous usage — which steps people use, by borough and language —
+          with cookieless analytics. We never store your address, and analytics never receive
+          your address, BBL, unit number, rent or lease dates. If you choose to leave an email
+          so we can hear your story, we store only that email — never linked to an address.
+        </p>
       </section>
 
       {/* ── CTA ──────────────────────────────────────────────── */}

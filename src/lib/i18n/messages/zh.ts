@@ -16,9 +16,9 @@ export const zh: Record<MessageKey, string> = {
   'common.optional': '（可选）',
 
   'hero.kicker': '面向纽约市租户的公共查询工具',
-  'hero.headline': '查询纽约市每一套租金稳定公寓。',
+  'hero.headline': '查询纽约市建筑是否有租金稳定单元。',
   'hero.sub':
-    '搜索地址后，地图将定位到该建筑，并与 DHCR 和 NYCDB 数据核对。如果属于租金稳定房，我们会把您的租约历史转换成一份可提交的多收租金投诉草稿。',
+    '搜索地址后，地图将定位到该建筑，并与 DHCR 和 NYCDB 数据核对。如果该建筑有登记的租金稳定单元，我们会把您的租约历史转换成一份可提交的多收租金投诉草稿。',
   'hero.stat.units': '租金稳定单元',
   'hero.stat.window': 'HSTPA 追溯期',
   'hero.stat.orders': '已收录的 RGB 决议',
@@ -67,15 +67,16 @@ export const zh: Record<MessageKey, string> = {
   'demo.hint.murrayHill': '默里山 — 中层建筑',
 
   'result.eyebrow': '结果 · 第二部分',
-  'result.stabilized.badge': '很可能是租金稳定房',
-  'result.stabilized.headline': '这栋建筑很可能有租金稳定单元。',
-  'result.stabilized.sub': '在 NYCDB rentstab 数据集和/或 DHCR 名单中找到了证据。',
+  'result.stabilized.badge': '有稳定单元',
+  'result.stabilized.headline': '这栋建筑有登记的租金稳定单元。',
+  'result.stabilized.sub':
+    '但这并不能确认您的公寓就是其中之一 — DHCR 和 NYCDB 的记录只到建筑层面。请向 DHCR 申请您公寓的租金历史（REC-1 表格）以确认。',
   'result.notListed.badge': '未列入',
   'result.notListed.headline': '未找到这栋建筑的租金稳定记录。',
   'result.notListed.sub':
     'DHCR 记录会滞后 1–2 年，部分稳定建筑（近期的 421-a / J-51）可能未显示。在下结论前请与 DHCR 核实。',
-  'result.unknown.badge': '很可能不是稳定房',
-  'result.unknown.headline': '这栋建筑很可能不是租金稳定房。',
+  'result.unknown.badge': '无记录',
+  'result.unknown.headline': '这栋建筑很可能没有租金稳定单元。',
   'result.unknown.sub':
     '我们没有在 DHCR 名单或 NYCDB 租金稳定数据集中找到您的地址。不在这些记录中的建筑通常是共管公寓、合作公寓、一至两户住宅或 1974 年以后建造的房屋 — 这些通常都不是租金稳定房。如需百分之百确认，请直接向 DHCR 核实。',
   'result.onDhcrList': '在 DHCR 名单中',
@@ -311,6 +312,18 @@ export const zh: Record<MessageKey, string> = {
   'draft.error.service': '起草服务出现故障，请重试。',
   'draft.error.failed': '起草投诉时出了问题。',
   'draft.error.ra89': '生成 RA-89 失败',
+  'draft.error.rateLimited': '您在过去一小时内已生成多份投诉草稿。请稍作休息，稍后再试。',
+  'draft.error.dailyCap': '今天的投诉草稿生成次数已达上限。请明天再试 — 您填写的内容已保存在此浏览器中。',
+
+  'feedback.question': '这对您有帮助吗？',
+  'feedback.thanks': '感谢您的反馈。',
+  'feedback.contactLabel': '我们可以联系您，了解您的经历吗？（可选）',
+  'feedback.emailPh': 'you@example.com',
+  'feedback.send': '发送',
+  'feedback.sending': '发送中…',
+  'feedback.sent': '谢谢 — 我们可能会与您联系。',
+  'feedback.error': '暂时无法保存，请稍后再试。',
+  'feedback.privacy': '我们只会用您的电子邮箱询问您的使用体验，绝不会与您的地址关联。',
 
   'email.subject': 'RA-89 提交材料包 — {street}',
   'email.hi': '您好：',

@@ -32,6 +32,8 @@ import type { Verdict } from '@/lib/stabilization';
 import type { Estimate } from '@/lib/overcharge';
 import { getOrder } from '@/lib/rgb';
 import { useI18n } from '@/lib/i18n';
+import { trackRa89DraftGenerated } from '@/lib/analytics';
+import FeedbackPrompt from '@/components/FeedbackPrompt';
 import type { MessageKey } from '@/lib/i18n/messages/en';
 import type {
   ComplaintInput,
@@ -470,9 +472,10 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
-        const errorBody = (await res.json().catch(() => ({}))) as { error?: string; details?: unknown };
-        const detail = errorBody.details ? ` — ${JSON.stringify(errorBody.details)}` : '';
-        throw new Error((errorBody.error ?? `Request failed with status ${res.status}`) + detail);
+        const errorBody = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        if (errorBody.code === 'rate_limited') throw new Error(t('draft.error.rateLimited'));
+        if (errorBody.code === 'daily_cap') throw new Error(t('draft.error.dailyCap'));
+        throw new Error(errorBody.error ?? `Request failed with status ${res.status}`);
       }
       // Manual NDJSON parser: read raw bytes off the response body,
       // decode to text, and split on '\n' — fetch's streaming body API
@@ -501,6 +504,7 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
       }
       setPhase('done');
       setGeneratedAt(new Date());
+      trackRa89DraftGenerated(verdict.bbl);
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         setPhase(text.length > 0 ? 'done' : 'idle');
@@ -1172,6 +1176,8 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
               </div>
               <p className="mt-1 text-[10px] text-muted">{t('draft.editRawHint')}</p>
             </details>
+
+            <FeedbackPrompt context="draft" className="mt-4" />
 
             <div className="mt-4 rounded-[10px] border border-warning-bd bg-warning-bg/70 px-3 py-2">
               <p className="text-[11px] text-warning leading-relaxed">

@@ -50,7 +50,8 @@ export default function ResultCard({ verdict, address }: Props) {
       {/* Top architectural strip */}
       <div className={`absolute inset-x-0 top-0 h-[3px] ${config.pillBg}`} />
       <div className="px-6 sm:px-8 pt-6 pb-7">
-        <div className="flex items-start justify-between gap-4">
+        {/* Phones: badge sits above the headline so it can't squeeze it. */}
+        <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="eyebrow">{t('result.eyebrow')}</span>
