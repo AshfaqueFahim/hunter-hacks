@@ -948,6 +948,11 @@ export default function InfoStory() {
             note="Free tenant counseling — call before you file."
           />
         </div>
+        <p className="mt-6 text-[12px] leading-relaxed text-muted">
+          Privacy: we count anonymous usage — which steps people use, by borough and language —
+          with cookieless analytics. We never store your address, and analytics never receive
+          your address, BBL, unit number, rent or lease dates.
+        </p>
       </section>
 
       {/* ── CTA ──────────────────────────────────────────────── */}

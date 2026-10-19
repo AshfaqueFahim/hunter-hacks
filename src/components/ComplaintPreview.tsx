@@ -32,6 +32,7 @@ import type { Verdict } from '@/lib/stabilization';
 import type { Estimate } from '@/lib/overcharge';
 import { getOrder } from '@/lib/rgb';
 import { useI18n } from '@/lib/i18n';
+import { trackRa89DraftGenerated } from '@/lib/analytics';
 import type { MessageKey } from '@/lib/i18n/messages/en';
 import type {
   ComplaintInput,
@@ -501,6 +502,7 @@ export default function ComplaintPreview({ verdict, estimate, address, bin }: Pr
       }
       setPhase('done');
       setGeneratedAt(new Date());
+      trackRa89DraftGenerated(verdict.bbl);
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         setPhase(text.length > 0 ? 'done' : 'idle');

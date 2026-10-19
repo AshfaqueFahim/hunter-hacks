@@ -30,3 +30,9 @@ test('copy: meta title/description do not claim to tell whether an apartment is 
   assert.doesNotMatch(layout, /if your apartment is rent-stabilized/i);
   assert.doesNotMatch(layout, /Check any NYC apartment/i);
 });
+
+test('copy: Info page says we count anonymous usage and never store addresses', () => {
+  const story = readFileSync(new URL('../src/app/info/story.tsx', import.meta.url), 'utf8');
+  assert.match(story, /count anonymous usage/i);
+  assert.match(story, /never store (your )?address/i);
+});

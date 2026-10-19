@@ -17,6 +17,11 @@ import type { GeoResult } from '@/lib/geosearch';
 import type { Verdict } from '@/lib/stabilization';
 import type { Estimate, LeaseEntry } from '@/lib/overcharge';
 import { orderCount } from '@/lib/rgb';
+import {
+  trackLookupRun,
+  trackOverchargeCalculated,
+  trackVerdictShown,
+} from '@/lib/analytics';
 
 const CityMap3D = dynamic(() => import('@/components/CityMap3D'), { ssr: false });
 
@@ -106,6 +111,7 @@ export default function Home() {
     setEstimateError(null);
     setFallbackRevealed(false);
     setIsLooking(true);
+    trackLookupRun();
 
     try {
       const res = await fetch('/api/lookup', {
@@ -119,8 +125,10 @@ export default function Home() {
       }
       const data = (await res.json()) as LookupResponse;
       setLookup(data);
+      trackVerdictShown(data.bbl, data.status === 'likely_stabilized' ? 'stabilized' : 'not_found');
     } catch (err) {
       console.error('Lookup failed:', err);
+      trackVerdictShown(result.bbl, 'error');
       setLookupError(err instanceof Error ? err.message : t('error.generic'));
     } finally {
       setIsLooking(false);
@@ -144,6 +152,7 @@ export default function Home() {
       }
       const data = (await res.json()) as Estimate;
       setEstimate(data);
+      trackOverchargeCalculated(lookup.bbl);
     } catch (err) {
       console.error('Estimate failed:', err);
       setEstimateError(
