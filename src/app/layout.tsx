@@ -19,9 +19,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Am I Rent Stabilized? — Check any NYC apartment",
+  title: "Am I Rent Stabilized? — Check any NYC building",
   description:
-    "Search any NYC address to see if your apartment is rent-stabilized, calculate any overcharge against the Rent Guidelines Board, and draft a DHCR complaint.",
+    "Search any NYC address to see if the building has registered rent-stabilized units, calculate any overcharge against the Rent Guidelines Board, and draft a DHCR complaint.",
 };
 
 export default function RootLayout({

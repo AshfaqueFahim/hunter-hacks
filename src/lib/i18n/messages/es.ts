@@ -17,9 +17,9 @@ export const es: Record<MessageKey, string> = {
   'common.optional': '(opcional)',
 
   'hero.kicker': 'Una consulta pública para inquilinos de NYC',
-  'hero.headline': 'Consulte cada apartamento de renta estabilizada en Nueva York.',
+  'hero.headline': 'Consulte si un edificio de Nueva York tiene unidades de renta estabilizada.',
   'hero.sub':
-    'Busque una dirección. Llevamos el mapa hasta el edificio, lo verificamos con DHCR y NYCDB y — si está estabilizado — convertimos su historial de contratos en un borrador de queja por sobrecargo.',
+    'Busque una dirección. Llevamos el mapa hasta el edificio, lo verificamos con DHCR y NYCDB y — si tiene unidades estabilizadas registradas — convertimos su historial de contratos en un borrador de queja por sobrecargo.',
   'hero.stat.units': 'Unidades estabilizadas',
   'hero.stat.window': 'Plazo HSTPA',
   'hero.stat.orders': 'Órdenes RGB modeladas',
@@ -68,15 +68,16 @@ export const es: Record<MessageKey, string> = {
   'demo.hint.murrayHill': 'Murray Hill — mediana altura',
 
   'result.eyebrow': 'Veredicto · Sección II',
-  'result.stabilized.badge': 'Probablemente estabilizado',
-  'result.stabilized.headline': 'Este edificio probablemente tiene unidades de renta estabilizada.',
-  'result.stabilized.sub': 'Se encontró evidencia en el conjunto de datos rentstab de NYCDB y/o en la lista de DHCR.',
+  'result.stabilized.badge': 'Unidades estabilizadas registradas',
+  'result.stabilized.headline': 'Este edificio tiene unidades de renta estabilizada registradas.',
+  'result.stabilized.sub':
+    'Eso no confirma que su apartamento sea una de ellas: los registros de DHCR y NYCDB son a nivel de edificio. Solicite a DHCR el historial de renta de su apartamento (Formulario REC-1) para confirmarlo.',
   'result.notListed.badge': 'No figura',
   'result.notListed.headline': 'No se encontró registro de estabilización para este edificio.',
   'result.notListed.sub':
     'Los registros de DHCR se retrasan de 1 a 2 años y algunos edificios estabilizados (421-a / J-51 recientes) pueden no aparecer. Verifique con DHCR antes de concluir.',
-  'result.unknown.badge': 'Probablemente no estabilizado',
-  'result.unknown.headline': 'Este edificio probablemente no tiene renta estabilizada.',
+  'result.unknown.badge': 'Probablemente sin unidades estabilizadas',
+  'result.unknown.headline': 'Este edificio probablemente no tiene unidades de renta estabilizada.',
   'result.unknown.sub':
     'No encontramos su dirección en la lista de DHCR ni en el conjunto de datos de estabilización de NYCDB. Los edificios fuera de estos registros suelen ser condominios, cooperativas, casas de una o dos familias, o construcciones posteriores a 1974 — ninguno de los cuales suele estar estabilizado. Para estar 100% seguro, verifique directamente con DHCR.',
   'result.onDhcrList': 'En la lista de DHCR',

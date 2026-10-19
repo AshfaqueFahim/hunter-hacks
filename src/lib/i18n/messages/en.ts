@@ -26,9 +26,9 @@ export const en = {
 
   // ── Hero (home page) ──────────────────────────────────────────────
   'hero.kicker': 'A public lookup for NYC tenants',
-  'hero.headline': 'Check every rent-stabilized apartment in New York.',
+  'hero.headline': 'Check any New York building for rent-stabilized units.',
   'hero.sub':
-    'Search an address. We fly the map to the building, check it against DHCR and NYCDB, and — if it’s stabilized — turn your lease history into a draftable overcharge complaint.',
+    'Search an address. We fly the map to the building, check it against DHCR and NYCDB, and — if it has registered stabilized units — turn your lease history into a draftable overcharge complaint.',
   'hero.stat.units': 'Stabilized units',
   'hero.stat.window': 'HSTPA window',
   'hero.stat.orders': 'RGB orders modeled',
@@ -84,15 +84,16 @@ export const en = {
 
   // ── Result card (verdict) ─────────────────────────────────────────
   'result.eyebrow': 'Verdict · Section II',
-  'result.stabilized.badge': 'Likely stabilized',
-  'result.stabilized.headline': 'This building likely has rent-stabilized units.',
-  'result.stabilized.sub': 'Evidence found in the NYCDB rentstab dataset and / or the DHCR list.',
+  'result.stabilized.badge': 'Registered stabilized units',
+  'result.stabilized.headline': 'This building has registered rent-stabilized units.',
+  'result.stabilized.sub':
+    'That doesn’t confirm your apartment is one of them — DHCR and NYCDB records are building-level. Request your apartment’s rent history from DHCR (Form REC-1) to confirm.',
   'result.notListed.badge': 'Not listed',
   'result.notListed.headline': 'No stabilization record found for this building.',
   'result.notListed.sub':
     'DHCR records lag by 1–2 years and some stabilized buildings (recent 421-a / J-51) may not appear. Cross-check with DHCR before concluding.',
-  'result.unknown.badge': 'Likely not stabilized',
-  'result.unknown.headline': 'This building is probably not rent-stabilized.',
+  'result.unknown.badge': 'Likely no stabilized units',
+  'result.unknown.headline': 'This building probably has no rent-stabilized units.',
   'result.unknown.sub':
     'We didn’t find your address on the DHCR list or in the NYCDB rent-stabilization dataset. Buildings outside these records are usually condos, co-ops, single/two-family homes, or post-1974 construction — none of which are typically rent-stabilized. To be 100% sure, verify directly with DHCR.',
   'result.onDhcrList': 'On DHCR list',
