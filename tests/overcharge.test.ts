@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { estimate, type EstimateInput } from '../src/lib/overcharge';
-import { getIncrease } from '../src/lib/rgb';
+import { getIncrease, latestOrderNo, orderCount } from '../src/lib/rgb';
 
 const ASOF_TODAY = '2026-04-25';
 
@@ -219,4 +219,51 @@ test('overcharge: missing RGB order carries legal rent forward unchanged', () =>
   assert.equal(result.years_analyzed[0].overcharge_monthly, 0);
   assert.equal(result.years_analyzed[0].overcharge_within_limit, 0);
   assert.ok(result.caveats.some((c) => c.includes('No RGB order found')));
+});
+
+test('rgb: Order #58 (2026-27 rent freeze) is 0% for 1- and 2-year leases', () => {
+  for (const term of [12, 24] as const) {
+    const inc = getIncrease('2026-10-01', term);
+    assert.equal(inc?.orderNo, 58);
+    assert.equal(inc?.pct, 0);
+  }
+  assert.equal(getIncrease('2027-09-30', 12)?.orderNo, 58);
+});
+
+test('rgb: orderCount and latestOrderNo are derived from the data', () => {
+  assert.equal(orderCount(), 58);
+  assert.equal(latestOrderNo(), 58);
+});
+
+test('overcharge: Nov 2026 renewal with any increase is flagged under the rent freeze', () => {
+  for (const term of [12, 24] as const) {
+    const result = estimate({
+      history: [
+        { startDate: '2025-11-01', endDate: '2026-10-31', monthlyRent: 2000, leaseTermMonths: 12 },
+        { startDate: '2026-11-01', endDate: term === 12 ? '2027-10-31' : '2028-10-31', monthlyRent: 2000.01, leaseTermMonths: term },
+      ],
+      asOfDate: '2026-11-15',
+    });
+    const y = result.years_analyzed[0];
+    assert.equal(y.allowed_pct, 0);
+    assert.equal(y.legal_monthly, 2000);
+    assert.ok(y.overcharge_monthly > 0, `term ${term}: expected overcharge, got ${y.overcharge_monthly}`);
+    assert.ok(result.overcharge_monthly > 0);
+  }
+});
+
+test('overcharge: Sep 2026 renewal still uses Order #57 rates (3% / 4.5%)', () => {
+  assert.equal(getIncrease('2026-09-30', 12)?.orderNo, 57);
+  const result = estimate({
+    history: [
+      { startDate: '2025-09-01', endDate: '2026-08-31', monthlyRent: 2000, leaseTermMonths: 12 },
+      { startDate: '2026-09-01', endDate: '2027-08-31', monthlyRent: 2060, leaseTermMonths: 12 },
+    ],
+    asOfDate: '2026-10-18',
+  });
+  const y = result.years_analyzed[0];
+  assert.equal(y.allowed_pct, 3.0);
+  near(y.legal_monthly, 2060);
+  assert.equal(y.overcharge_monthly, 0);
+  assert.equal(getIncrease('2026-09-01', 24)?.pct, 4.5);
 });

@@ -16,6 +16,7 @@ import { useI18n } from '@/lib/i18n';
 import type { GeoResult } from '@/lib/geosearch';
 import type { Verdict } from '@/lib/stabilization';
 import type { Estimate, LeaseEntry } from '@/lib/overcharge';
+import { orderCount } from '@/lib/rgb';
 
 const CityMap3D = dynamic(() => import('@/components/CityMap3D'), { ssr: false });
 
@@ -325,7 +326,7 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-3 pt-2">
                 <Stat n="~1M" l={t('hero.stat.units')} />
                 <Stat n="6 yr" l={t('hero.stat.window')} />
-                <Stat n="57" l={t('hero.stat.orders')} />
+                <Stat n={String(orderCount())} l={t('hero.stat.orders')} />
               </div>
             </div>
           </div>

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import Footer from '@/components/Footer';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n';
+import { latestOrderNo } from '@/lib/rgb';
 
 /* ============================================================================
    /info — an editorial, scrollytelling explanation of NYC rent stabilization.
@@ -851,7 +852,7 @@ export default function InfoStory() {
             title="Walk the rent forward"
             body={
               <>
-                If you enter a lease history, we apply Rent Guidelines Board orders #1–#57 to
+                If you enter a lease history, we apply Rent Guidelines Board orders #1–#{latestOrderNo()} to
                 compute the legal renewal rent at every step and flag where the actual rent went
                 higher.
               </>
@@ -934,7 +935,7 @@ export default function InfoStory() {
           <SourceLine
             href="https://rentguidelinesboard.cityofnewyork.us/"
             title="Rent Guidelines Board"
-            note="Sets the annual legal renewal increases (Apartment Orders #1–#57)."
+            note={`Sets the annual legal renewal increases (Apartment Orders #1–#${latestOrderNo()}).`}
           />
           <SourceLine
             href="https://hcr.ny.gov/form-ra-89"

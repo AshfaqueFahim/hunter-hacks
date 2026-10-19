@@ -6,7 +6,7 @@
 
 | File | Size | Source | Refresh |
 |---|---|---|---|
-| `rgb_orders.json` | small | Hand-keyed from the [official RGB Apartment Orders chart](https://rentguidelinesboard.cityofnewyork.us/wp-content/uploads/2025/07/RGB-Apartment-Chart.pdf) (Orders #1–#57) | Annually after the new RGB order is adopted (typically June/July) |
+| `rgb_orders.json` | small | Hand-keyed from the [official RGB Apartment Orders chart](https://rentguidelinesboard.cityofnewyork.us/wp-content/uploads/2025/07/RGB-Apartment-Chart.pdf) (Orders #1–#58) | Annually after the new RGB order is adopted (typically June/July) |
 | `rentstab.csv` | 9.3 MB | NYCDB `rentstab` dataset — `https://taxbillsnyc.s3.amazonaws.com/joined.csv` | Quarterly-ish; this dataset covers 2007–2017 unit counts plus PLUTO joins (address, owner, lat/lng, etc.) |
 | `rentstab_v2.csv` | 24 MB | NYCDB `rentstab_v2` dataset — `https://s3.amazonaws.com/justfix-data/rentstab_counts_from_doffer_2024.csv` | Annually after JustFix's `nyc-doffer` re-runs; covers 2018–2024 unit counts |
 

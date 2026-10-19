@@ -48,3 +48,13 @@ export function getIncrease(leaseStart: Date | string, termMonths: LeaseTerm): R
     notes: order.notes,
   };
 }
+
+// Number of RGB Apartment Orders modeled — derived from the data so UI copy
+// never drifts when a new order is added.
+export function orderCount(): number {
+  return ORDERS.length;
+}
+
+export function latestOrderNo(): number {
+  return ORDERS.reduce((max, o) => Math.max(max, o.order_no), 0);
+}
