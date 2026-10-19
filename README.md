@@ -75,6 +75,7 @@ it from fresh NYCDB CSVs, follow [`data/README.md`](data/README.md) and run `npm
 | `npm test` | Unit tests (`node --test` over `tests/*.test.ts`) |
 | `npm run lint` | ESLint |
 | `npm run seed` | Rebuild `data/app.db` from `data/seed/` |
+| `npm run feedback:contacts` | Print opt-in feedback contact emails (needs Upstash env vars) |
 
 ### Environment variables
 
@@ -86,16 +87,25 @@ All are optional. Lookups and overcharge estimates work with none set.
 | `ANTHROPIC_API_KEY` | Drafts the RA-89 cover statement (used if no OpenAI key is set). |
 | `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | Enables cookieless [Umami](https://umami.is/) analytics. Unset = no analytics script. |
 | `NEXT_PUBLIC_UMAMI_SCRIPT_URL` | Umami script URL; defaults to `https://cloud.umami.is/script.js`. Set this if you self-host. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis (free tier, via the Vercel Marketplace). Backs the rate limit, the daily AI cap and feedback contacts. `KV_REST_API_URL`/`KV_REST_API_TOKEN` also work. |
+| `AI_DAILY_CAP` | Max AI drafting calls per New York day across all users. Default `200`. |
 | `APP_DB_PATH` | Override the SQLite location (default `./data/app.db`). |
+
+## Abuse and cost limits
+
+- The AI drafting endpoint allows **5 drafts per IP per hour**. IPs are hashed before use and never stored raw.
+- A global **daily cap** (`AI_DAILY_CAP`, default 200) stops all AI calls for the rest of the New York day once reached.
+- Both counters live in Upstash Redis. Without it they fall back to per-instance memory, which is weaker on serverless.
 
 ## Privacy
 
 Analytics are cookieless and count anonymous usage only. Events are `lookup_run`, `verdict_shown`,
-`overcharge_calculated`, `ra89_draft_generated` and `language_changed`. The only properties ever
-sent are borough, verdict result and language. [`src/lib/analytics.ts`](src/lib/analytics.ts)
+`overcharge_calculated`, `ra89_draft_generated`, `language_changed`, `verdict_feedback` and
+`draft_feedback`. The only properties ever sent are borough, verdict result, language and a yes/no. [`src/lib/analytics.ts`](src/lib/analytics.ts)
 enforces this with an allowlist. Addresses, BBLs, unit numbers, rents and lease dates are never
 sent to analytics, and addresses are never stored on the server. Form answers for the RA-89 are
-saved only in your own browser (`localStorage`).
+saved only in your own browser (`localStorage`). If a tenant opts in to being contacted, only
+their email, which prompt it came from and a timestamp are stored (in Upstash), never an address.
 
 ## License
 

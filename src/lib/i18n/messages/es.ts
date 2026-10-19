@@ -68,7 +68,7 @@ export const es: Record<MessageKey, string> = {
   'demo.hint.murrayHill': 'Murray Hill — mediana altura',
 
   'result.eyebrow': 'Veredicto · Sección II',
-  'result.stabilized.badge': 'Unidades estabilizadas registradas',
+  'result.stabilized.badge': 'Con unidades estabilizadas',
   'result.stabilized.headline': 'Este edificio tiene unidades de renta estabilizada registradas.',
   'result.stabilized.sub':
     'Eso no confirma que su apartamento sea una de ellas: los registros de DHCR y NYCDB son a nivel de edificio. Solicite a DHCR el historial de renta de su apartamento (Formulario REC-1) para confirmarlo.',
@@ -76,7 +76,7 @@ export const es: Record<MessageKey, string> = {
   'result.notListed.headline': 'No se encontró registro de estabilización para este edificio.',
   'result.notListed.sub':
     'Los registros de DHCR se retrasan de 1 a 2 años y algunos edificios estabilizados (421-a / J-51 recientes) pueden no aparecer. Verifique con DHCR antes de concluir.',
-  'result.unknown.badge': 'Probablemente sin unidades estabilizadas',
+  'result.unknown.badge': 'Sin registro',
   'result.unknown.headline': 'Este edificio probablemente no tiene unidades de renta estabilizada.',
   'result.unknown.sub':
     'No encontramos su dirección en la lista de DHCR ni en el conjunto de datos de estabilización de NYCDB. Los edificios fuera de estos registros suelen ser condominios, cooperativas, casas de una o dos familias, o construcciones posteriores a 1974 — ninguno de los cuales suele estar estabilizado. Para estar 100% seguro, verifique directamente con DHCR.',
@@ -313,6 +313,18 @@ export const es: Record<MessageKey, string> = {
   'draft.error.service': 'El servicio de redacción falló. Por favor, inténtelo de nuevo.',
   'draft.error.failed': 'Algo salió mal al redactar la queja.',
   'draft.error.ra89': 'No se pudo generar el RA-89',
+  'draft.error.rateLimited': 'Ha redactado varias quejas en la última hora. Tómese un descanso e inténtelo de nuevo más tarde.',
+  'draft.error.dailyCap': 'Hemos alcanzado el límite de hoy para redactar quejas. Inténtelo de nuevo mañana — sus respuestas quedan guardadas en este navegador.',
+
+  'feedback.question': '¿Le resultó útil?',
+  'feedback.thanks': 'Gracias por contarnos.',
+  'feedback.contactLabel': '¿Podemos contactarle para conocer su historia? (opcional)',
+  'feedback.emailPh': 'usted@ejemplo.com',
+  'feedback.send': 'Enviar',
+  'feedback.sending': 'Enviando…',
+  'feedback.sent': 'Gracias — es posible que le escribamos.',
+  'feedback.error': 'No pudimos guardarlo ahora. Inténtelo de nuevo más tarde.',
+  'feedback.privacy': 'Solo usaremos su correo para preguntarle sobre su experiencia. Nunca se vincula con su dirección.',
 
   'email.subject': 'Paquete de presentación RA-89 — {street}',
   'email.hi': 'Hola:',

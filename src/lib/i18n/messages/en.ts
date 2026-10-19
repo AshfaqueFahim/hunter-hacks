@@ -84,7 +84,7 @@ export const en = {
 
   // ── Result card (verdict) ─────────────────────────────────────────
   'result.eyebrow': 'Verdict · Section II',
-  'result.stabilized.badge': 'Registered stabilized units',
+  'result.stabilized.badge': 'Has stabilized units',
   'result.stabilized.headline': 'This building has registered rent-stabilized units.',
   'result.stabilized.sub':
     'That doesn’t confirm your apartment is one of them — DHCR and NYCDB records are building-level. Request your apartment’s rent history from DHCR (Form REC-1) to confirm.',
@@ -92,7 +92,7 @@ export const en = {
   'result.notListed.headline': 'No stabilization record found for this building.',
   'result.notListed.sub':
     'DHCR records lag by 1–2 years and some stabilized buildings (recent 421-a / J-51) may not appear. Cross-check with DHCR before concluding.',
-  'result.unknown.badge': 'Likely no stabilized units',
+  'result.unknown.badge': 'No record',
   'result.unknown.headline': 'This building probably has no rent-stabilized units.',
   'result.unknown.sub':
     'We didn’t find your address on the DHCR list or in the NYCDB rent-stabilization dataset. Buildings outside these records are usually condos, co-ops, single/two-family homes, or post-1974 construction — none of which are typically rent-stabilized. To be 100% sure, verify directly with DHCR.',
@@ -332,6 +332,19 @@ export const en = {
   'draft.error.service': 'The drafting service failed. Please try again.',
   'draft.error.failed': 'Something went wrong drafting the complaint.',
   'draft.error.ra89': 'Failed to generate RA-89',
+  'draft.error.rateLimited': 'You’ve drafted several complaints in the last hour. Please take a break and try again later.',
+  'draft.error.dailyCap': 'We’ve reached today’s limit for drafting complaints. Please try again tomorrow — your answers are saved in this browser.',
+
+  // ── "Was this useful?" feedback ──────────────────────────────────
+  'feedback.question': 'Was this useful?',
+  'feedback.thanks': 'Thanks for letting us know.',
+  'feedback.contactLabel': 'Can we contact you for your story? (optional)',
+  'feedback.emailPh': 'you@example.com',
+  'feedback.send': 'Send',
+  'feedback.sending': 'Sending…',
+  'feedback.sent': 'Thank you — we may reach out.',
+  'feedback.error': 'Couldn’t save that right now. Please try again later.',
+  'feedback.privacy': 'We’ll only use your email to ask about your experience. It’s never linked to your address.',
 
   'email.subject': 'RA-89 Filing Packet — {street}',
   'email.hi': 'Hi,',

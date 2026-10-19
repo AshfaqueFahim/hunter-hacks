@@ -36,3 +36,12 @@ test('copy: Info page says we count anonymous usage and never store addresses', 
   assert.match(story, /count anonymous usage/i);
   assert.match(story, /never store (your )?address/i);
 });
+
+test('copy: rate-limit, daily-cap and feedback strings exist in all four languages', () => {
+  const keys = ['draft.error.rateLimited', 'draft.error.dailyCap', 'feedback.question', 'feedback.contactLabel'];
+  for (const [lang, m] of Object.entries(locales)) {
+    for (const k of keys) {
+      assert.ok(((m as Record<string, string>)[k] ?? '').length > 0, `${lang}: ${k}`);
+    }
+  }
+});

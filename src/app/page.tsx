@@ -9,6 +9,7 @@ import ResultCard from '@/components/ResultCard';
 import RentHistoryForm from '@/components/RentHistoryForm';
 import OverchargeSummary from '@/components/OverchargeSummary';
 import ComplaintPreview from '@/components/ComplaintPreview';
+import FeedbackPrompt from '@/components/FeedbackPrompt';
 import Footer from '@/components/Footer';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import StageStepper, { type Stage } from '@/components/StageStepper';
@@ -377,6 +378,7 @@ export default function Home() {
         {visibleLookup && selectedResult && (
           <div ref={verdictRef}>
             <ResultCard verdict={visibleLookup} address={selectedResult.label} />
+            <FeedbackPrompt key={visibleLookup.bbl} context="verdict" className="mt-3" />
           </div>
         )}
 

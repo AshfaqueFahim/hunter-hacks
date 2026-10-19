@@ -2,7 +2,7 @@
 //
 // Hard rule: NEVER send addresses, BBLs, unit numbers, rent amounts or lease
 // dates. The only properties that may leave the browser are `borough`,
-// `result` and `language`, each restricted to a closed set of values —
+// `result`, `language` and `useful`, each restricted to a closed set of values —
 // `sanitizeProps` enforces this for every event, so a careless call site
 // can't leak free text. Borough is derived locally from the BBL's first
 // digit; the BBL itself is never sent.
@@ -22,9 +22,10 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
   borough: new Set<string>(Object.values(BOROUGHS)),
   result: new Set<VerdictResult>(['stabilized', 'not_found', 'error']),
   language: new Set(['en', 'es', 'zh', 'bn']),
+  useful: new Set(['yes', 'no']),
 };
 
-type Props = Partial<Record<'borough' | 'result' | 'language', string>>;
+type Props = Partial<Record<'borough' | 'result' | 'language' | 'useful', string>>;
 
 type UmamiWindow = { umami?: { track: (name: string, data?: Props) => void } };
 
@@ -70,4 +71,10 @@ export function trackRa89DraftGenerated(bbl: string | undefined): void {
 
 export function trackLanguageChanged(language: string): void {
   send('language_changed', { language });
+}
+
+// "Was this useful?" — the answer only. Any contact email goes to
+// /api/feedback, never to analytics.
+export function trackFeedback(context: 'verdict' | 'draft', useful: boolean): void {
+  send(`${context}_feedback`, { useful: useful ? 'yes' : 'no' });
 }

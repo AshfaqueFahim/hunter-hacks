@@ -76,3 +76,14 @@ test('analytics: no-op (and no throw) when the script is not loaded or there is 
   delete (globalThis as unknown as { window?: unknown }).window;
   assert.doesNotThrow(() => trackLanguageChanged('zh'));
 });
+
+test('analytics: feedback events send only useful=yes|no', async () => {
+  const { trackFeedback } = await import('../src/lib/analytics');
+  trackFeedback('verdict', true);
+  trackFeedback('draft', false);
+  assert.deepEqual(calls, [
+    { name: 'verdict_feedback', data: { useful: 'yes' } },
+    { name: 'draft_feedback', data: { useful: 'no' } },
+  ]);
+  assert.deepEqual(sanitizeProps({ useful: 'maybe', email: 'a@b.co' }), {});
+});

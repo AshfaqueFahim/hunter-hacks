@@ -951,7 +951,8 @@ export default function InfoStory() {
         <p className="mt-6 text-[12px] leading-relaxed text-muted">
           Privacy: we count anonymous usage — which steps people use, by borough and language —
           with cookieless analytics. We never store your address, and analytics never receive
-          your address, BBL, unit number, rent or lease dates.
+          your address, BBL, unit number, rent or lease dates. If you choose to leave an email
+          so we can hear your story, we store only that email — never linked to an address.
         </p>
       </section>
 
